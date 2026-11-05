@@ -73,6 +73,7 @@ Bg #FFFFFF, 1px right border #E4E4E7.
     - line 3 y 48-64: snippet 12px #71717A, one line, ellipsis.
   - Hover bg #F4F4F5; selected bg #DBEAFE (selected wins over hover).
   - Click selects the row.
+  - Scrollbar: see "Scrollbars" below.
 
 ### Detail pane: x 640-1280 (640 wide)
 
@@ -82,6 +83,10 @@ Bg #FFFFFF, vertical scroll, padding 32 all sides.
 - 16px gap; sender row 40 tall: 40px avatar (same colour/initials rule, initials 15px), 12px gap, column: fromName 14px semibold #18181B, fromEmail 13px #71717A; dateLong 12px #71717A right-aligned, top.
 - 24px gap; body paragraphs 14px #27272A line-height 22, 14px between paragraphs, wrap at 576 width.
 - No selection (empty filter result): "No message selected" 14px #A1A1AA centred in the pane.
+
+### Scrollbars
+
+Both scroll areas (the list and the detail pane) show an overlay scrollbar on their right edge while scrolling and for about 1 s after the last scroll, then hide it. Use the framework's own scrollbar where it has one (Chromium, Ghia, SwiftUI, MyGo). Raw GPUI has none built in, so the app draws one the way Zed does: a 6px-wide rounded thumb, #000000 at 35% opacity, inset 2px from the right edge, height proportional to viewport/content (at least 25px, as in Zed), shown on scroll and hidden by a timer 1 s after the last scroll.
 
 ## Behaviour
 
@@ -93,7 +98,8 @@ Bg #FFFFFF, vertical scroll, padding 32 all sides.
 
 ## Parity notes
 
-
+- Scrollbars: on macOS the frameworks with native scrollbars (Chromium, SwiftUI) follow System Settings > Appearance > "Show scroll bars" (`AppleShowScrollBars`; the harness records it in env.json and report.md). With "Automatic" and no mouse attached they are overlays shown while scrolling; with a mouse attached (or "Always") they show classic always-visible bars.
+- MyGo: its scroll containers and lists show their thumb (6 DIP, black 32%) only while the pointer is over the container or a thumb is dragged (`Scrollbars`/`KeepScrollbars` default; the app leaves them at the default), not after a scroll, so keyboard-driven scrolling with the pointer elsewhere shows no bar and the bar does not linger for 1 s.
 - Electron: `fetch('./messages.json')` is async, so `ready-to-show` can fire before the list and detail are filled (a few ms later); the sidebar, search input and empty list column are painted first. `app.focus({ steal: true })` is requested per the spec, but macOS may still decline activation when the process is spawned from a background process (observed: another app stayed frontmost).
 - Ghia: `letter-spacing: 0.5` on "LABELS" is not applied: `letterSpacing` is not in Ghia's `StyleDesc` for HTML text (only SVG text has it), so the heading is drawn without tracking (a few px narrower).
 - Ghia: `<virtual-list>` runs in `itemCount` mode (documented windowing): 60 rows are mounted around `onVisibleRange.startIndex` (native builds viewport + 512 px overdraw, about 24 rows). `scrollToItem` top-aligns a row, so selection-into-view uses `scrollTo` against the fixed 72 px rows to get the SPEC's minimal scroll.

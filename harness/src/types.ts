@@ -149,6 +149,8 @@ export type Env = {
   input: { enabled: boolean; reason: string }
   probe: Probe
   macos: string
+  /** `defaults read -g AppleShowScrollBars`: Automatic, WhenScrolling or Always; "unset" when absent (means Automatic). */
+  scrollBars: string | null
   chip: string
   memBytes: number
   display: Probe["mainDisplay"]

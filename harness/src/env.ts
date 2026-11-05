@@ -92,6 +92,13 @@ export type EnvInputs = {
   input: Env["input"]
 }
 
+/** `defaults read` exits 1 when the key is absent, which macOS treats as Automatic. */
+async function showScrollBars(): Promise<string> {
+  const child = Bun.spawn(["defaults", "read", "-g", "AppleShowScrollBars"], { stdout: "pipe", stderr: "pipe" })
+  const [stdout, exitCode] = await Promise.all([new Response(child.stdout).text(), child.exited])
+  return exitCode === 0 ? stdout.trim() : "unset"
+}
+
 /** Anything unavailable is recorded as null plus a warning; a benchmark run shouldn't die on a missing version string. */
 export async function collectEnv(inputs: EnvInputs): Promise<Env> {
   const warnings: string[] = []
@@ -106,6 +113,7 @@ export async function collectEnv(inputs: EnvInputs): Promise<Env> {
 
   const productVersion = await attempt("sw_vers", () => exec(["sw_vers", "-productVersion"]))
   const buildVersion = await attempt("sw_vers", () => exec(["sw_vers", "-buildVersion"]))
+  const scrollBars = await attempt("AppleShowScrollBars", showScrollBars)
   const ghiaDir = join(REPO_ROOT, "vendor", "ghia")
   const ghiaSha = await attempt("vendor/ghia SHA", () => exec(["git", "-C", ghiaDir, "rev-parse", "HEAD"]))
   const zedSha = await attempt("vendor/ghia/zed SHA", () => exec(["git", "-C", join(ghiaDir, "zed"), "rev-parse", "HEAD"]))
@@ -135,6 +143,7 @@ export async function collectEnv(inputs: EnvInputs): Promise<Env> {
     input: inputs.input,
     probe: inputs.probe,
     macos: productVersion && buildVersion ? `${productVersion} (${buildVersion})` : inputs.probe.osVersion,
+    scrollBars,
     chip: inputs.probe.cpu,
     memBytes: inputs.probe.memBytes,
     display: inputs.probe.mainDisplay,

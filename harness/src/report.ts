@@ -312,6 +312,7 @@ function renderEnvironment(env: Env): string {
   const lines = [
     `Run started ${env.startedAt}; apps ${env.args.apps.join(", ")}; ${env.args.launches} startup launches and ${env.args.rounds} sessions per app.`,
     `macOS ${env.macos}, ${env.chip} (${env.cpuCores} cores), ${(env.memBytes / 2 ** 30).toFixed(0)} GiB RAM.`,
+    `Scroll bars (System Settings): ${env.scrollBars ?? "unknown"}${env.scrollBars === "unset" ? " (Automatic)" : ""}.`,
     `Main display ${env.display.widthPt} x ${env.display.heightPt} pt, scale ${env.display.scale}, ${env.display.refreshHz} Hz.`,
     `Load average (1/5/15 min) at start: ${env.loadAverage.map((value) => value.toFixed(2)).join(" / ")}.`,
     ...(env.args.apps.includes("ghia") ? [`Ghia ${env.ghia.sha ?? "unknown"}, zed ${env.ghia.zedSha ?? "unknown"}.`] : []),
