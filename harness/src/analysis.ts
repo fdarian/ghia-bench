@@ -1,5 +1,6 @@
+import { appSpec } from "./apps"
 import type {
-  AppId, Frame, Input, LaunchResult, PhaseName, PhaseOutput, Proc, Sample, SessionRecord, WindowStatus,
+  AppId, Delivery, Frame, Input, LaunchResult, PhaseName, PhaseOutput, Proc, Rect, Sample, SessionRecord, WindowStatus,
 } from "./types"
 
 const NS_PER_MS = 1e6
@@ -134,6 +135,14 @@ export function footprintTotal(sample: Sample): number {
 
 export const ELECTRON_GROUPS = ["main", "renderer", "gpu", "network", "other"] as const
 export type ElectronGroup = (typeof ELECTRON_GROUPS)[number]
+export const HELPER_GROUPS = ["main", "helpers"] as const
+
+/** Per-process breakdown columns for an app, or null when the app runs as one process. */
+export function groupNames(app: AppId): readonly string[] | null {
+  const spec = appSpec(app)
+  if (spec.chromium) return ELECTRON_GROUPS
+  return spec.multiProcess ? HELPER_GROUPS : null
+}
 
 /**
  * Electron's GPU and network processes both run the plain "Helper" executable, so the name alone cannot tell them
@@ -155,9 +164,11 @@ export function electronGroupOf(name: string | null, isRoot: boolean, type: stri
 export function groupFunction(
   app: AppId, rootPid: number, types: Record<string, string>,
 ): (proc: Proc) => string {
-  if (app === "electron") {
+  const spec = appSpec(app)
+  if (spec.chromium) {
     return (proc) => electronGroupOf(proc.name, proc.pid === rootPid, proc.pid in types ? types[proc.pid] : null)
   }
+  if (spec.multiProcess) return (proc) => (proc.pid === rootPid ? "main" : "helpers")
   return () => "all"
 }
 
@@ -168,12 +179,29 @@ export function startupMs(launch: LaunchResult): { windowVisibleMs: number | nul
   }
 }
 
+/** The regions whose change counts as an app frame in each phase (the title bar is window-manager chrome, not app output). */
+export const PHASE_REGIONS: Record<PhaseName, string[]> = {
+  idle: ["search", "count", "list", "detail", "sidebar"],
+  scroll: ["list"],
+  hover: ["list"],
+  type: ["search", "list", "count"],
+  navigate: ["detail"],
+}
+
 export function framesBetween(frames: Frame[], fromNs: number, toNs: number): Frame[] {
   return frames.filter((frame) => !frame.first && frame.tNs >= fromNs && frame.tNs <= toNs)
 }
 
+/**
+ * The capture delivers a frame per display refresh whether or not the app drew, so only frames in which a
+ * target region's pixels changed are app frames.
+ */
+export function changedFrames(frames: Frame[], regions: string[]): Frame[] {
+  return frames.filter((frame) => !frame.first && frame.changed.some((region) => regions.includes(region)))
+}
+
 export function idleFrameCount(frames: Frame[], beforeNs: number, afterNs: number): number {
-  return framesBetween(frames, beforeNs, afterNs).length
+  return framesBetween(changedFrames(frames, PHASE_REGIONS.idle), beforeNs, afterNs).length
 }
 
 export type MotionMetrics = {
@@ -184,24 +212,51 @@ export type MotionMetrics = {
   longFrames: number
   longFrameThresholdMs: number
   firstInputLatencyMs: number | null
+  /** Hover: one latency per input that moves the pointer onto another row (null = no visible change). */
+  rowLatenciesMs: (number | null)[] | null
+}
+
+/** Rows are 72 pt and start at content y 84 (SPEC); the setup move leaves the pointer on row 0. */
+export function hoverTriggers(inputs: Input[], windowFrame: Rect, titlebar: number): Input[] {
+  const listTopY = windowFrame.y + titlebar + 84
+  const rowOf = (input: Input) => {
+    if (input.y === undefined) throw new Error("a move input has no y")
+    return Math.floor((input.y - listTopY) / 72)
+  }
+  const triggers: Input[] = []
+  let previous = 0
+  for (const input of inputs) {
+    if (input.kind !== "move") continue
+    const row = rowOf(input)
+    if (row !== previous) triggers.push(input)
+    previous = row
+  }
+  return triggers
 }
 
 /**
- * Scroll and hover: frames presented between the first and last input. `region` is the pane the input moves;
- * the first-input latency is the first frame after the first input in which it changed.
+ * Scroll and hover: app frames (the phase's region changed) between the first and last input. The first-input
+ * latency runs from `triggers[0]` (default: the first input) to the first changed frame after it; for hover the
+ * pointer only changes the list when it enters another row, so the triggers are those crossings and every one
+ * gets its own latency.
  */
-export function motionMetrics(frames: Frame[], inputs: Input[], refreshHz: number, region: string): MotionMetrics {
+export function motionMetrics(
+  frames: Frame[], inputs: Input[], refreshHz: number, region: string, triggers?: Input[],
+): MotionMetrics {
   if (inputs.length < 2) throw new Error("motion metrics need at least two inputs")
   const firstNs = inputs[0].tNs
   const lastNs = inputs[inputs.length - 1].tNs
-  const inWindow = framesBetween(frames, firstNs, lastNs)
+  const changed = changedFrames(frames, [region])
+  const inWindow = framesBetween(changed, firstNs, lastNs)
   const intervalsMs: number[] = []
   for (let index = 1; index < inWindow.length; index++) {
     intervalsMs.push((inWindow[index].tNs - inWindow[index - 1].tNs) / NS_PER_MS)
   }
   const longFrameThresholdMs = (1.5 * 1000) / refreshHz
   const spanMs = (lastNs - firstNs) / NS_PER_MS
-  const firstChange = frames.find((frame) => !frame.first && frame.tNs > firstNs && frame.changed.includes(region))
+  const rowLatenciesMs = triggers ? eventLatencies(changed, triggers.map((trigger) => trigger.tNs), [region]) : null
+  const startNs = triggers ? (triggers.length > 0 ? triggers[0].tNs : null) : firstNs
+  const firstChange = startNs === null ? undefined : changed.find((frame) => frame.tNs > startNs)
   return {
     frames: inWindow.length,
     spanMs,
@@ -209,28 +264,71 @@ export function motionMetrics(frames: Frame[], inputs: Input[], refreshHz: numbe
     intervalsMs,
     longFrames: intervalsMs.filter((interval) => interval > longFrameThresholdMs).length,
     longFrameThresholdMs,
-    firstInputLatencyMs: firstChange ? (firstChange.tNs - firstNs) / NS_PER_MS : null,
+    firstInputLatencyMs: firstChange && startNs !== null ? (firstChange.tNs - startNs) / NS_PER_MS : null,
+    rowLatenciesMs,
   }
 }
 
 /**
- * One latency per keyDown: the first frame after it in which any of `regions` changed, counting only frames
- * before the next keyDown. The last key has no successor, so it is cut off after the median spacing of the others
+ * One latency per event time: the first frame after it in which any of `regions` changed, counting only frames
+ * before the next event. The last event has no successor, so it is cut off after the median spacing of the others
  * (otherwise a later caret blink would be taken for an echo). null = no visible change.
  */
-export function keyLatencies(frames: Frame[], inputs: Input[], regions: string[]): (number | null)[] {
-  const downs = inputs.filter((input) => input.kind === "keyDown")
+export function eventLatencies(frames: Frame[], eventsNs: number[], regions: string[]): (number | null)[] {
   const gaps: number[] = []
-  for (let index = 1; index < downs.length; index++) gaps.push(downs[index].tNs - downs[index - 1].tNs)
+  for (let index = 1; index < eventsNs.length; index++) gaps.push(eventsNs[index] - eventsNs[index - 1])
   const lastCutoffNs = gaps.length > 0 ? percentile(gaps, 50) : Number.POSITIVE_INFINITY
-  return downs.map((down, index) => {
-    const untilNs = index + 1 < downs.length ? downs[index + 1].tNs : down.tNs + lastCutoffNs
+  return eventsNs.map((at, index) => {
+    const untilNs = index + 1 < eventsNs.length ? eventsNs[index + 1] : at + lastCutoffNs
     const hit = frames.find(
-      (frame) => !frame.first && frame.tNs > down.tNs && frame.tNs < untilNs
+      (frame) => !frame.first && frame.tNs > at && frame.tNs < untilNs
         && frame.changed.some((region) => regions.includes(region)),
     )
-    return hit ? (hit.tNs - down.tNs) / NS_PER_MS : null
+    return hit ? (hit.tNs - at) / NS_PER_MS : null
   })
+}
+
+export function keyLatencies(frames: Frame[], inputs: Input[], regions: string[]): (number | null)[] {
+  return eventLatencies(frames, inputs.filter((input) => input.kind === "keyDown").map((input) => input.tNs), regions)
+}
+
+export type DeliveryAnalysis = {
+  /** Frames the capture delivered (changed or not) per second between the first and last input. */
+  framesPerSec: number
+  /** framesPerSec / display refresh rate. */
+  ratio: number
+  intervalP50Ms: number
+  intervalP95Ms: number
+  intervalMaxMs: number
+  /** Below 0.9 x the refresh rate: the phase's fps and latencies cannot be better than the capture. */
+  captureBound: boolean
+  /** The helper's own count for the whole phase, when recorded. */
+  helper: Delivery | null
+}
+
+export const CAPTURE_BOUND_RATIO = 0.9
+
+/** All delivered frames (changed or not) in [fromNs, toNs]. */
+export function deliveryOf(
+  frames: Frame[], fromNs: number, toNs: number, refreshHz: number, helper: Delivery | null,
+): DeliveryAnalysis | null {
+  const delivered = framesBetween(frames, fromNs, toNs)
+  if (delivered.length < 2 || !(toNs > fromNs)) return null
+  const intervals: number[] = []
+  for (let index = 1; index < delivered.length; index++) {
+    intervals.push((delivered[index].tNs - delivered[index - 1].tNs) / NS_PER_MS)
+  }
+  const framesPerSec = delivered.length / ((toNs - fromNs) / NS_PER_SEC)
+  const ratio = framesPerSec / refreshHz
+  return {
+    framesPerSec,
+    ratio,
+    intervalP50Ms: percentile(intervals, 50),
+    intervalP95Ms: percentile(intervals, 95),
+    intervalMaxMs: Math.max(...intervals),
+    captureBound: ratio < CAPTURE_BOUND_RATIO,
+    helper,
+  }
 }
 
 export function frameValidity(window: WindowStatus | null): { valid: boolean; reasons: string[] } {
@@ -254,6 +352,8 @@ export type PhaseAnalysis = {
   footprint?: number
   groupFootprint?: Record<string, number>
   idleFrames?: number | null
+  /** Every frame the capture delivered, whether or not the app drew: a capture-bound run shows up here. */
+  delivery?: DeliveryAnalysis | null
   /** scroll, hover */
   motion?: MotionMetrics | null
   /** type */
@@ -280,6 +380,13 @@ function analyzePhase(
     groups: diffUsageByGroup(data.rusageBefore, data.rusageAfter, groupOf),
   }
   const frames = data.frames
+  const helperDelivery = data.delivery ?? null
+  if (frames && name === "idle") {
+    analysis.delivery = deliveryOf(frames, data.rusageBefore.tNs, data.rusageAfter.tNs, refreshHz, helperDelivery)
+  } else if (frames && data.inputs.length >= 2) {
+    analysis.delivery = deliveryOf(
+      frames, data.inputs[0].tNs, data.inputs[data.inputs.length - 1].tNs, refreshHz, helperDelivery)
+  }
   switch (name) {
     case "idle":
       analysis.footprint = footprintTotal(data.rusageAfter)
@@ -287,8 +394,12 @@ function analyzePhase(
       analysis.idleFrames = frames ? idleFrameCount(frames, data.rusageBefore.tNs, data.rusageAfter.tNs) : null
       break
     case "scroll":
-    case "hover":
       analysis.motion = frames ? motionMetrics(frames, data.inputs, refreshHz, "list") : null
+      break
+    case "hover":
+      analysis.motion = frames
+        ? motionMetrics(frames, data.inputs, refreshHz, "list", hoverTriggers(data.inputs, data.windowFrame, data.titlebarHeight))
+        : null
       break
     case "type":
       analysis.echoMs = frames ? keyLatencies(frames, data.inputs, ["search"]) : null

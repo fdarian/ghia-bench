@@ -1,18 +1,13 @@
-import { existsSync, lstatSync, readdirSync } from "node:fs"
+import { existsSync, lstatSync, readdirSync, readFileSync } from "node:fs"
 import { cpus, loadavg } from "node:os"
 import { join } from "node:path"
 import { REPO_ROOT } from "./helper"
+import { appSpec } from "./apps"
 import type { AppId, AppInfo, Env, Probe } from "./types"
 import { APP_IDS } from "./types"
 
-export const BUNDLE_NAMES: Record<AppId, string> = {
-  electron: "Mailbox-Electron.app",
-  ghia: "Mailbox-Ghia.app",
-  gpui: "Mailbox-GPUI.app",
-}
-
 export function bundlePath(app: AppId): string {
-  return join(REPO_ROOT, "dist", BUNDLE_NAMES[app])
+  return join(REPO_ROOT, "dist", appSpec(app).bundle)
 }
 
 export function existingApps(): AppId[] {
@@ -74,12 +69,19 @@ export async function appInfo(app: AppId): Promise<AppInfo> {
 }
 
 async function electronVersions(): Promise<{ electron: string; chromium: string }> {
-  const executable = join(bundlePath("electron"), "Contents", "MacOS", BUNDLE_NAMES.electron.replace(".app", ""))
+  const executable = join(bundlePath("electron"), "Contents", "MacOS", appSpec("electron").bundle.replace(".app", ""))
   const out = await exec([executable, "-e", "console.log(JSON.stringify(process.versions))"], {
     env: { ELECTRON_RUN_AS_NODE: "1" },
   })
   const versions = JSON.parse(out) as Record<string, string>
   return { electron: versions.electron, chromium: versions.chrome }
+}
+
+/** `go` directive and the egoist/mygo requirement of apps/mygo/go.mod. */
+export function mygoModule(goMod: string): { goVersion: string | null; module: string | null } {
+  const goVersion = /^go\s+(\S+)/m.exec(goMod)
+  const module = /^\s*(?:require\s+)?(github\.com\/egoist\/mygo\S*)\s+(\S+)/m.exec(goMod)
+  return { goVersion: goVersion ? goVersion[1] : null, module: module ? `${module[1]} ${module[2]}` : null }
 }
 
 export type EnvInputs = {
@@ -110,6 +112,16 @@ export async function collectEnv(inputs: EnvInputs): Promise<Env> {
   const electron = inputs.args.apps.includes("electron") ? await attempt("Electron version", electronVersions) : null
   const rustc = await attempt("rustc --version", () => exec(["rustc", "--version"], { cwd: join(REPO_ROOT, "apps", "gpui") }))
 
+  const mygo = inputs.args.apps.includes("mygo")
+    ? await attempt("apps/mygo/go.mod", async () => mygoModule(readFileSync(join(REPO_ROOT, "apps", "mygo", "go.mod"), "utf8")))
+    : null
+  const swift = inputs.args.apps.includes("swiftui")
+    ? {
+      swift: await attempt("swift --version", async () => (await exec(["swift", "--version"])).split("\n")[0]),
+      xcode: await attempt("xcodebuild -version", async () => (await exec(["xcodebuild", "-version"])).split("\n").join(", ")),
+    }
+    : null
+
   const apps: Env["apps"] = {}
   for (const app of inputs.args.apps) {
     const info = await attempt(`${app} bundle info`, () => appInfo(app))
@@ -132,6 +144,8 @@ export async function collectEnv(inputs: EnvInputs): Promise<Env> {
     electron,
     bun: Bun.version,
     rustc,
+    mygo,
+    swift,
     apps,
     warnings,
   }

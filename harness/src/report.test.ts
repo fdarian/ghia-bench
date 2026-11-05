@@ -78,14 +78,24 @@ describe("buildReport", () => {
     expect(report).toContain("| Sessions (window active and uncovered / total) | 1 / 2 |")
     expect(report).toContain("| Window visible (ms) | 400 |")
     expect(report).toContain("| Content ready (ms) | 600 |")
-    expect(report).toContain("| Frames presented | 1 |")
-    expect(report).toContain("| Frames between first and last input | 6 |")
+    expect(report).toContain("| App frames (a region changed) | 1 |")
+    expect(report).toContain("| App frames between first and last input (list changed) | 6 |")
     expect(report).toContain("| Long frames (> 12.5 ms) | 5 |")
     expect(report).toContain("| First-input latency (ms) | 5 |")
+    expect(report).toContain("WARNING Electron scroll: capture delivered 6–6 frames/s (< 0.9 x 120 Hz) in 2 of 2 sessions")
+    expect(report).toContain("| Electron | scroll | 6 | 2 / 2 |")
     expect(report).toContain("| Echo latency p50 / p95 (ms, pooled per key) | 13.5 / 14.8 |")
     expect(report).toContain("| Result: keys with no visible change | 1 / 2 |")
     expect(report).toContain("| App | Rounds | Reason |")
     expect(report).toContain("app was not the active application (appActive=false)")
+  })
+
+  test("columns follow the registry order for any subset of apps", () => {
+    const mygo = { ...session(0, true), app: "mygo" as const }
+    const swiftui = { ...session(0, true), app: "swiftui" as const }
+    const report = buildReport(env, [mygo, swiftui, session(0, true)], { includeInvalid: false })
+    expect(report).toContain("| Metric | Electron | SwiftUI | MyGo |")
+    expect(report.match(/per-process breakdown/g)!.length).toBe(1)
   })
 
   test("skipped and failed phases are listed with their reasons; usage is still reported", () => {

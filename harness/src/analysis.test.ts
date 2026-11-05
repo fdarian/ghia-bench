@@ -1,9 +1,10 @@
 import { describe, expect, test } from "bun:test"
 import {
-  diffUsage, diffUsageByGroup, electronGroupOf, footprintByGroup, frameValidity, idleFrameCount, keyLatencies,
-  motionMetrics, percentile, startupMs, summarize,
+  changedFrames, deliveryOf, diffUsage, diffUsageByGroup, electronGroupOf, footprintByGroup, frameValidity, groupFunction,
+  groupNames, hoverTriggers, idleFrameCount, keyLatencies, motionMetrics, percentile, startupMs, summarize,
 } from "./analysis"
-import type { Frame, Input, Proc, Sample, WindowStatus } from "./types"
+import realRun from "./fixtures/run-2026-11-05T10-14-26.json"
+import type { Frame, Input, Proc, Rect, Sample, WindowStatus } from "./types"
 
 const MS = 1e6
 
@@ -195,10 +196,12 @@ describe("motionMetrics", () => {
       frame(-50, [], true),
       frame(-20, ["list"]), // before the first input
       frame(8, ["list"]),
+      frame(12, []), // delivered but nothing changed: not an app frame
+      frame(14, ["sidebar", "titlebar"]),
       frame(16.6, ["list"]),
       frame(25, ["list"]),
       frame(60, ["list"]), // 35 ms gap: long at 120 Hz (threshold 12.5 ms)
-      frame(70, ["list"]),
+      frame(70, ["list", "search"]),
       frame(1000, ["list"]),
       frame(1010, ["list"]), // after the last input
     ]
@@ -231,6 +234,13 @@ describe("idleFrameCount", () => {
     const frames = [frame(0, [], true), frame(50, ["search"]), frame(600, ["search"]), frame(1200, ["search"]), frame(2000, ["search"])]
     expect(idleFrameCount(frames, 100 * MS, 1500 * MS)).toBe(2)
   })
+
+  test("delivered frames with no change, and title bar changes, are not app frames", () => {
+    const frames = [
+      frame(0, [], true), frame(100, []), frame(200, ["titlebar"]), frame(300, ["detail"]), frame(400, []), frame(500, ["list", "titlebar"]),
+    ]
+    expect(idleFrameCount(frames, 0, 1000 * MS)).toBe(2)
+  })
 })
 
 describe("frameValidity", () => {
@@ -254,5 +264,105 @@ describe("frameValidity", () => {
   })
   test("missing window status is invalid", () => {
     expect(frameValidity(null).valid).toBe(false)
+  })
+})
+
+describe("hoverTriggers", () => {
+  const frameRect: Rect = { x: 100, y: 100, w: 1280, h: 832 }
+  // list top in global y = 100 + 32 + 84 = 216; rows are 72 pt
+  const move = (tMs: number, y: number): Input => ({ tNs: tMs * MS, kind: "move", y })
+
+  test("only inputs that enter another row trigger; the setup move leaves the pointer on row 0", () => {
+    const inputs = [move(0, 216), move(10, 250), move(20, 287.9), move(30, 288), move(40, 300), move(50, 360), move(60, 300)]
+    expect(hoverTriggers(inputs, frameRect, 32).map((input) => input.tNs / MS)).toEqual([30, 50, 60])
+  })
+
+  test("a move without y is an error", () => {
+    expect(() => hoverTriggers([{ tNs: 0, kind: "move" }], frameRect, 32)).toThrow()
+  })
+})
+
+describe("deliveryOf", () => {
+  test("rate counts every delivered frame, changed or not, and is flagged below 0.9 x the refresh rate", () => {
+    const frames = [frame(0, [], true), ...Array.from({ length: 100 }, (_, index) => frame(index * 10 + 10, []))]
+    const delivery = deliveryOf(frames, 0, 1000 * MS, 120, null)!
+    expect(delivery.framesPerSec).toBeCloseTo(100)
+    expect(delivery.ratio).toBeCloseTo(100 / 120)
+    expect(delivery.captureBound).toBe(true)
+    expect(delivery.intervalP50Ms).toBeCloseTo(10)
+    expect(deliveryOf(frames, 0, 1000 * MS, 100, null)!.captureBound).toBe(false)
+  })
+
+  test("fewer than two frames or an empty window is no data", () => {
+    expect(deliveryOf([frame(5, [])], 0, 1000 * MS, 120, null)).toBeNull()
+    expect(deliveryOf([frame(5, []), frame(6, [])], 10 * MS, 10 * MS, 120, null)).toBeNull()
+  })
+})
+
+describe("groups", () => {
+  test("multi-process apps get a breakdown, single-process apps do not", () => {
+    expect(groupNames("electron")).toContain("renderer")
+    expect(groupNames("ghia")).toBeNull()
+    expect(groupNames("swiftui")).toBeNull()
+    expect(groupNames("mygo")).toBeNull()
+    expect(groupFunction("gpui", 1, {})(proc(5))).toBe("all")
+  })
+})
+
+/** Frames and inputs recorded by benchhelper in results/2026-11-05T10-14-26-387Z (120 Hz display, before the fixes). */
+describe("real frames from the first capture run", () => {
+  const run = realRun as unknown as Record<string, {
+    windowFrame: Rect; titlebarHeight: number; rusageBefore: { tNs: number }; rusageAfter: { tNs: number }; inputs: Input[]; frames: Frame[]
+  }>
+
+  test("idle: ~650 frames were delivered with no pixel change; only Ghia's caret blink is an app frame", () => {
+    const electron = run["electron-0-idle"]
+    expect(electron.frames.length).toBe(645)
+    expect(idleFrameCount(electron.frames, electron.rusageBefore.tNs, electron.rusageAfter.tNs)).toBe(0)
+    const ghia = run["ghia-4-idle"]
+    expect(ghia.frames.length).toBe(1072)
+    expect(idleFrameCount(ghia.frames, ghia.rusageBefore.tNs, ghia.rusageAfter.tNs)).toBe(20)
+  })
+
+  test("the capture itself was below 0.9 x 120 Hz in every recorded phase", () => {
+    for (const key of ["electron-0-idle", "ghia-4-idle", "electron-3-scroll", "gpui-0-scroll", "gpui-4-hover"]) {
+      const phase = run[key]
+      const from = phase.inputs.length > 0 ? phase.inputs[0].tNs : phase.rusageBefore.tNs
+      const to = phase.inputs.length > 0 ? phase.inputs[phase.inputs.length - 1].tNs : phase.rusageAfter.tNs
+      const delivery = deliveryOf(phase.frames, from, to, 120, null)!
+      expect(delivery.captureBound).toBe(true)
+    }
+    const slow = run["electron-0-idle"]
+    expect(deliveryOf(slow.frames, slow.rusageBefore.tNs, slow.rusageAfter.tNs, 120, null)!.framesPerSec).toBeCloseTo(61.4, 1)
+  })
+
+  test("scroll: the list never changed, so no app frames and no first-input latency (the wheel events reached no view)", () => {
+    for (const key of ["electron-3-scroll", "gpui-0-scroll"]) {
+      const phase = run[key]
+      expect(phase.inputs.length).toBe(720)
+      const metrics = motionMetrics(phase.frames, phase.inputs, 120, "list")
+      expect(metrics.frames).toBe(0)
+      expect(metrics.firstInputLatencyMs).toBeNull()
+    }
+  })
+
+  test("hover: 18 row crossings each get a latency; measuring from the first input gives the old ~245 ms", () => {
+    const phase = run["gpui-4-hover"]
+    const triggers = hoverTriggers(phase.inputs, phase.windowFrame, phase.titlebarHeight)
+    expect(triggers.length).toBe(18)
+    const metrics = motionMetrics(phase.frames, phase.inputs, 120, "list", triggers)
+    expect(metrics.rowLatenciesMs!.filter((value) => value === null).length).toBe(0)
+    expect(metrics.firstInputLatencyMs!).toBeGreaterThan(30)
+    expect(metrics.firstInputLatencyMs!).toBeLessThan(40)
+    expect(Math.max(...metrics.rowLatenciesMs!.map((value) => value!))).toBeLessThan(45)
+    expect(motionMetrics(phase.frames, phase.inputs, 120, "list").firstInputLatencyMs!).toBeGreaterThan(200)
+    expect(changedFrames(phase.frames, ["list"]).length).toBe(19)
+  })
+
+  test("type: every key but none missing has an echo latency", () => {
+    const phase = run["electron-4-type"]
+    const echo = keyLatencies(phase.frames, phase.inputs, ["search"])
+    expect(echo.length).toBe(32)
+    expect(echo.filter((value) => value === null).length).toBe(0)
   })
 })

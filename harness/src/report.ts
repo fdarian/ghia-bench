@@ -1,10 +1,10 @@
 import { readFileSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
 import {
-  analyzeLaunch, analyzeSession, percentile, summarize,
+  analyzeLaunch, analyzeSession, CAPTURE_BOUND_RATIO, groupNames, percentile, summarize,
   type LaunchAnalysis, type PhaseAnalysis, type SessionAnalysis, type Summary,
 } from "./analysis"
-import { ELECTRON_GROUPS } from "./analysis"
+import { appSpec } from "./apps"
 import type { AppId, Env, LaunchRecord, PhaseName, RunRecord, SessionRecord } from "./types"
 import { APP_IDS, APP_LABELS, INPUT_PHASES, PHASE_NAMES } from "./types"
 
@@ -184,6 +184,13 @@ function keyCells(data: AppData[], name: PhaseName, pick: (phase: PhaseAnalysis)
   }
 }
 
+function deliveryRow(data: AppData[], name: PhaseName): { label: string; cells: string[] } {
+  return {
+    label: "Capture delivery (frames/s, changed or not)",
+    cells: data.map((app) => frameCell(app, name, (phase) => phase.delivery?.framesPerSec)),
+  }
+}
+
 function summaryRows(env: Env, data: AppData[]): Row[] {
   const rows: Row[] = []
   const cells = (make: (app: AppData) => string) => data.map(make)
@@ -198,17 +205,27 @@ function summaryRows(env: Env, data: AppData[]): Row[] {
 
   rows.push({ heading: "Idle (10 s)" })
   rows.push(...usageRows(data, "idle"))
-  rows.push({ label: "Frames presented", cells: cells((app) => frameCell(app, "idle", (phase) => phase.idleFrames)) })
+  rows.push({ label: "App frames (a region changed)", cells: cells((app) => frameCell(app, "idle", (phase) => phase.idleFrames)) })
+  rows.push(deliveryRow(data, "idle"))
   rows.push({ label: "Footprint after idle (MiB)", cells: cells((app) => medianRangeOf(phaseValues(app.sessions, "idle", (phase) => phase.footprint), MIB)) })
 
   for (const name of ["scroll", "hover"] as const) {
     rows.push({ heading: name === "scroll" ? "Scroll (3 s down, 3 s up, 120 events/s)" : "Hover (2 s down, 2 s up, 120 moves/s)" })
     rows.push(...usageRows(data, name))
-    rows.push({ label: "Frames between first and last input", cells: cells((app) => frameCell(app, name, (phase) => phase.motion?.frames)) })
-    rows.push({ label: "Frame rate (fps, higher is better)", cells: cells((app) => frameCell(app, name, (phase) => phase.motion?.fps)) })
-    rows.push({ label: "Frame interval p50 / p95 / p99 (ms, pooled)", cells: cells((app) => pooledPercentiles(pooledMotion(app, name), [50, 95, 99])) })
+    rows.push({ label: "App frames between first and last input (list changed)", cells: cells((app) => frameCell(app, name, (phase) => phase.motion?.frames)) })
+    rows.push({ label: "App frame rate (fps, higher is better)", cells: cells((app) => frameCell(app, name, (phase) => phase.motion?.fps)) })
+    rows.push({ label: "App frame interval p50 / p95 / p99 (ms, pooled)", cells: cells((app) => pooledPercentiles(pooledMotion(app, name), [50, 95, 99])) })
     rows.push({ label: `Long frames (> ${num(1500 / env.display.refreshHz)} ms)`, cells: cells((app) => frameCell(app, name, (phase) => phase.motion?.longFrames)) })
-    rows.push({ label: "First-input latency (ms)", cells: cells((app) => frameCell(app, name, (phase) => phase.motion?.firstInputLatencyMs)) })
+    rows.push({
+      label: name === "scroll" ? "First-input latency (ms)" : "First-row-change latency (ms)",
+      cells: cells((app) => frameCell(app, name, (phase) => phase.motion?.firstInputLatencyMs)),
+    })
+    if (name === "hover") {
+      const crossings = keyCells(data, "hover", (phase) => phase.motion?.rowLatenciesMs)
+      rows.push({ label: "Row-change latency p50 / p95 (ms, pooled per row crossing)", cells: crossings.percentiles })
+      rows.push({ label: "Row crossings with no visible change", cells: crossings.noChange })
+    }
+    rows.push(deliveryRow(data, name))
   }
 
   rows.push({ heading: "Type (\"quarterly report\", then 16 backspaces, 150 ms per key)" })
@@ -219,12 +236,14 @@ function summaryRows(env: Env, data: AppData[]): Row[] {
   rows.push({ label: "Echo: keys with no visible change", cells: echo.noChange })
   rows.push({ label: "Result latency p50 / p95 (ms, pooled per key)", cells: result.percentiles })
   rows.push({ label: "Result: keys with no visible change", cells: result.noChange })
+  rows.push(deliveryRow(data, "type"))
 
   rows.push({ heading: "Navigate (30 x ArrowDown, 120 ms per key)" })
   rows.push(...usageRows(data, "navigate"))
   const detail = keyCells(data, "navigate", (phase) => phase.detailMs)
   rows.push({ label: "Detail latency p50 / p95 (ms, pooled per key)", cells: detail.percentiles })
   rows.push({ label: "Detail: keys with no visible change", cells: detail.noChange })
+  rows.push(deliveryRow(data, "navigate"))
 
   rows.push({ heading: "After workload" })
   rows.push({ label: "Footprint after workload (MiB)", cells: cells((app) => medianRangeOf(present(app.sessions.map((session) => session.analysis.workloadFootprint)), MIB)) })
@@ -252,14 +271,13 @@ function renderSummary(env: Env, data: AppData[]): string {
   return lines.join("\n")
 }
 
-function renderElectronBreakdown(data: AppData[]): string | null {
-  const electron = data.find((app) => app.app === "electron")
-  if (!electron || electron.sessions.length === 0) return null
+function renderBreakdown(app: AppData): string | null {
+  const groups = groupNames(app.app)
+  if (!groups || app.sessions.length === 0) return null
   const phases: PhaseName[] = PHASE_NAMES
-  const groupNames = [...ELECTRON_GROUPS]
-  const rows = [...groupNames, "total"].map((group) => {
+  const rows = [...groups, "total"].map((group) => {
     const footprint = (kind: "idle" | "workload") => {
-      const values = present(electron.sessions.map((session) => {
+      const values = present(app.sessions.map((session) => {
         if (group === "total") {
           return kind === "idle" ? phaseOf(session, "idle")?.footprint : session.analysis.workloadFootprint
         }
@@ -268,7 +286,7 @@ function renderElectronBreakdown(data: AppData[]): string | null {
       }))
       return medianRangeOf(values, MIB)
     }
-    const cpu = (name: PhaseName) => medianRangeOf(present(electron.sessions.map((session) => {
+    const cpu = (name: PhaseName) => medianRangeOf(present(app.sessions.map((session) => {
       const phase = phaseOf(session, name)
       if (!phase) return null
       if (group === "total") return phase.usage.cpuPct
@@ -277,10 +295,13 @@ function renderElectronBreakdown(data: AppData[]): string | null {
     })))
     return [group, footprint("idle"), footprint("workload"), ...phases.map(cpu)]
   })
+  const groupNote = appSpec(app.app).chromium
+    ? "main = the root pid; renderer, GPU and network come from the Chromium `--type` on the process command line (a plain `Helper` runs both GPU and network), other = any other utility or unclassified process."
+    : "main = the root pid, helpers = every other process in the tree."
   return table(
     ["Process group", "Footprint after idle (MiB)", "Footprint after workload (MiB)", ...phases.map((name) => `CPU % ${name}`)],
     rows,
-  ) + "\n\nMedian [min–max] across sessions. Groups: main = the root pid; renderer, GPU and network come from the Chromium `--type` on the process command line (a plain `Helper` runs both GPU and network), other = any other utility or unclassified process. A group that did not exist in a session is left out of that median; footprints are `phys_footprint`, which can double-count shared pages across processes."
+  ) + `\n\nMedian [min–max] across sessions. Groups: ${groupNote} A group that did not exist in a session is left out of that median; footprints are \`phys_footprint\`, which can double-count shared pages across processes.`
 }
 
 function bulletList(items: string[]): string {
@@ -293,9 +314,11 @@ function renderEnvironment(env: Env): string {
     `macOS ${env.macos}, ${env.chip} (${env.cpuCores} cores), ${(env.memBytes / 2 ** 30).toFixed(0)} GiB RAM.`,
     `Main display ${env.display.widthPt} x ${env.display.heightPt} pt, scale ${env.display.scale}, ${env.display.refreshHz} Hz.`,
     `Load average (1/5/15 min) at start: ${env.loadAverage.map((value) => value.toFixed(2)).join(" / ")}.`,
-    `Ghia ${env.ghia.sha ?? "unknown"}, zed ${env.ghia.zedSha ?? "unknown"}.`,
-    `Electron ${env.electron ? `${env.electron.electron}, Chromium ${env.electron.chromium}` : "unknown"}.`,
+    ...(env.args.apps.includes("ghia") ? [`Ghia ${env.ghia.sha ?? "unknown"}, zed ${env.ghia.zedSha ?? "unknown"}.`] : []),
+    ...(env.args.apps.includes("electron") ? [`Electron ${env.electron ? `${env.electron.electron}, Chromium ${env.electron.chromium}` : "unknown"}.`] : []),
     `Bun ${env.bun}, ${env.rustc ?? "rustc unknown"}.`,
+    ...(env.mygo ? [`MyGo ${env.mygo.module ?? "module unknown"}, go ${env.mygo.goVersion ?? "unknown"}.`] : []),
+    ...(env.swift ? [`Swift ${env.swift.swift ?? "unknown"}; Xcode ${env.swift.xcode ?? "unknown"}.`] : []),
     `Frame capture: ${env.capture.enabled ? "on" : "off"} (${env.capture.reason}). Input: ${env.input.enabled ? "on" : "off"} (${env.input.reason}).`,
   ]
   for (const app of env.args.apps) {
@@ -305,6 +328,76 @@ function renderEnvironment(env: Env): string {
     lines.push(`${APP_LABELS[app]}: ${(info.bundleKb / 1024).toFixed(1)} MiB bundle, executable \`${info.executable}\` ${(info.executableBytes / MIB).toFixed(1)} MiB${largest ? `; largest code files: ${largest}` : ""}.`)
   }
   return bulletList(lines)
+}
+
+const DELIVERY_PHASES: PhaseName[] = ["scroll", "hover", "type", "navigate"]
+
+type DeliveryRowSource = { app: AppData; name: PhaseName; sessions: { analysis: PhaseAnalysis }[] }
+
+function deliverySources(data: AppData[]): DeliveryRowSource[] {
+  return data.flatMap((app) => PHASE_NAMES.map((name) => ({
+    app,
+    name,
+    sessions: app.sessions.flatMap((session) => {
+      const analysis = phaseOf(session, name)
+      return analysis && analysis.delivery ? [{ analysis }] : []
+    }),
+  }))).filter((source) => source.sessions.length > 0)
+}
+
+/** Warnings for input phases only: an idle window may legitimately deliver fewer frames. */
+export function captureWarnings(env: Env, data: AppData[]): string[] {
+  const warnings: string[] = []
+  for (const source of deliverySources(data)) {
+    if (!DELIVERY_PHASES.includes(source.name)) continue
+    const bound = source.sessions.filter((session) => session.analysis.delivery!.captureBound)
+    if (bound.length === 0) continue
+    const rates = bound.map((session) => session.analysis.delivery!.framesPerSec)
+    warnings.push(
+      `WARNING ${APP_LABELS[source.app.app]} ${source.name}: capture delivered ${num(Math.min(...rates))}–${num(Math.max(...rates))} frames/s `
+      + `(< ${CAPTURE_BOUND_RATIO} x ${env.display.refreshHz} Hz) in ${bound.length} of ${source.sessions.length} sessions; `
+      + "its frame rate and latencies are capture-bound, not app-bound.",
+    )
+  }
+  return warnings
+}
+
+function renderDelivery(env: Env, data: AppData[]): string {
+  const sources = deliverySources(data)
+  if (sources.length === 0) return "No frames were captured."
+  const rows = sources.map((source) => {
+    const deliveries = source.sessions.map((session) => session.analysis.delivery!)
+    const helper = deliveries.flatMap((delivery) => (delivery.helper ? [delivery.helper] : []))
+    const helperCell = (pick: (entry: NonNullable<(typeof deliveries)[number]["helper"]>) => number, scale = 1) =>
+      helper.length === 0 ? "–" : medianRangeOf(helper.map(pick), scale)
+    const statuses = new Map<string, number>()
+    for (const entry of helper) for (const [status, count] of Object.entries(entry.statusCounts)) statuses.set(status, (statuses.get(status) ?? 0) + count)
+    return [
+      APP_LABELS[source.app.app],
+      source.name,
+      medianRangeOf(deliveries.map((delivery) => delivery.framesPerSec)),
+      deliveries.filter((delivery) => delivery.captureBound).length + " / " + deliveries.length,
+      medianRangeOf(deliveries.map((delivery) => delivery.intervalP50Ms)),
+      medianRangeOf(deliveries.map((delivery) => delivery.intervalP95Ms)),
+      medianRangeOf(deliveries.map((delivery) => delivery.intervalMaxMs)),
+      helperCell((entry) => entry.meanIntervalMs),
+      helperCell((entry) => entry.gapsOver1p5),
+      helperCell((entry) => entry.handlerMaxMs),
+      helperCell((entry) => entry.framesWithoutDirtyRects),
+      helper.length === 0 ? "–" : [...statuses.entries()].map(([status, count]) => `${status} ${count}`).join(", "),
+    ]
+  })
+  const warnings = captureWarnings(env, data)
+  return (warnings.length > 0 ? bulletList(warnings) + "\n\n" : "No input phase was capture-bound.\n\n")
+    + plainTable(
+      [
+        "App", "Phase", "Delivered frames/s", `Sessions < ${CAPTURE_BOUND_RATIO} x ${env.display.refreshHz} Hz`, "Interval p50 (ms)", "Interval p95 (ms)",
+        "Interval max (ms)", "Helper: mean interval (ms)", "Helper: gaps > 1.5 x display", "Helper: handler max (ms)",
+        "Helper: complete frames without dirty rects", "Helper: SCK frame statuses (all sessions)",
+      ],
+      rows,
+    )
+    + `\n\nFrames/s and intervals are every frame the capture delivered between the first and last input (the whole 10 s for idle), changed or not; cells are median [min–max] over sessions. Helper columns are the helper's own counts over the whole phase and are – for runs recorded before the helper counted them. A static window may legitimately deliver fewer frames, so a warning is a reason to check the capture, not a proof.`
 }
 
 function renderValidity(env: Env, records: RunRecord[], data: AppData[], includeInvalid: boolean): string {
@@ -361,6 +454,8 @@ function renderValidity(env: Env, records: RunRecord[], data: AppData[], include
     + "\n\nCPU, instruction, energy, wakeup and memory metrics of those sessions are still used.",
   )
 
+  sections.push("### Capture delivery\n\n" + renderDelivery(env, data))
+
   const captureErrors: string[][] = []
   const phaseErrors: string[][] = []
   const stderrNotes: string[][] = []
@@ -415,7 +510,9 @@ const METHOD_NOTES = [
   "Every metric is lower is better unless marked. Cells are median [min–max] over sessions (or startup launches); latency, interval and p50 / p95 cells pool every key or frame across valid sessions. – means no data; the reason is under Validity.",
   "Startup is measured from the mach time just before the launch call. Window visible = first poll that sees an on-screen window of the pid; content ready = first captured frame matching the Mailbox signature. The first startup launch per app is discarded.",
   "CPU, instructions, cycles, energy and wakeups are rusage deltas summed over the app's whole process tree during the phase. Processes that first appear during a phase count from zero.",
-  "Frame counts include the search caret's blink, which repaints the search region, so an idle app with a blinking caret shows a few frames.",
+  "The capture delivers a frame per display refresh whether or not the app drew, so every frame metric counts only app frames: frames in which the phase's target region changed (idle: any content region; scroll and hover: the list; type: search, list or count; navigate: the detail pane). The title bar is ignored. The search caret's blink repaints the search region, so an idle app with a blinking caret shows a few frames.",
+  "Capture delivery rows count every delivered frame, changed or not. When it is below 0.9 x the refresh rate during an input phase, the app's frame rate and latencies cannot be better than the capture: see Validity.",
+  "Scroll first-input latency = first input post to the first frame in which the list changed. Hover moves change the list only when the pointer enters another 72 pt row, so first-row-change latency runs from the first input that crosses into a new row, and every crossing gets its own latency.",
   "Echo latency = first frame after a keyDown in which the search box changed; result latency = first frame in which the list or the count changed; only frames before the next keyDown count, otherwise the key has no visible change. Detail latency (navigate) uses the detail pane the same way. Long frames are intervals over 1.5 x the refresh interval.",
 ]
 
@@ -429,8 +526,12 @@ export function buildReport(env: Env, records: RunRecord[], options: { includeIn
     renderSummary(env, data),
     bulletList(METHOD_NOTES),
   ]
-  const breakdown = renderElectronBreakdown(data)
-  if (breakdown) parts.push("## Electron per-process breakdown", breakdown)
+  const warnings = captureWarnings(env, data)
+  if (warnings.length > 0) parts.push(bulletList(warnings))
+  for (const app of data) {
+    const breakdown = renderBreakdown(app)
+    if (breakdown) parts.push(`## ${APP_LABELS[app.app]} per-process breakdown`, breakdown)
+  }
   parts.push("## Validity", renderValidity(env, records, data, options.includeInvalid))
   return parts.join("\n\n") + "\n"
 }

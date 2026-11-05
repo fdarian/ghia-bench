@@ -9,7 +9,7 @@ import { APP_IDS, type AppId } from "./types"
 
 const USAGE = `usage:
   bun harness/src/bench.ts check
-  bun harness/src/bench.ts run [--apps electron,ghia,gpui] [--rounds 5] [--launches 10] [--capture auto|on|off] [--allow-missing-permissions] [--out results/<ISO>]
+  bun harness/src/bench.ts run [--apps electron,ghia,gpui,swiftui,mygo] [--rounds 5] [--launches 10] [--capture auto|on|off] [--allow-missing-permissions] [--out results/<ISO>]
   bun harness/src/bench.ts report <results dir> [--include-invalid]`
 
 function positiveInt(name: string, text: string, min: number): number {

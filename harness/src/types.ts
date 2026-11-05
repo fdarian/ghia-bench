@@ -1,7 +1,6 @@
-export type AppId = "electron" | "ghia" | "gpui"
-export const APP_IDS: AppId[] = ["electron", "ghia", "gpui"]
-
-export const APP_LABELS: Record<AppId, string> = { electron: "Electron", ghia: "Ghia", gpui: "GPUI" }
+import type { AppId } from "./apps"
+export { APP_IDS, APP_LABELS } from "./apps"
+export type { AppId } from "./apps"
 
 export type PhaseName = "idle" | "scroll" | "hover" | "type" | "navigate"
 export const PHASE_NAMES: PhaseName[] = ["idle", "scroll", "hover", "type", "navigate"]
@@ -61,6 +60,22 @@ export type Frame = { tNs: number; changed: string[]; first?: boolean }
 
 export type Input = { tNs: number; kind: string; key?: string; dy?: number; x?: number; y?: number }
 
+/** What SCK delivered during a phase, as counted by the helper (absent in runs recorded before it existed). */
+export type Delivery = {
+  requestedIntervalMs: number
+  statusCounts: Record<string, number>
+  complete: number
+  meanIntervalMs: number
+  maxIntervalMs: number
+  gapsOver1p5: number
+  handlerMeanMs: number
+  handlerMaxMs: number
+  displayLagMeanMs: number
+  displayLagMaxMs: number
+  framesWithDirtyRects: number
+  framesWithoutDirtyRects: number
+}
+
 export type PhaseOutput = {
   name: PhaseName
   windowFrame: Rect
@@ -70,6 +85,7 @@ export type PhaseOutput = {
   rusageAfterTail: Sample
   inputs: Input[]
   frames: Frame[] | null
+  delivery?: Delivery
   captureError?: string
 }
 
@@ -142,6 +158,9 @@ export type Env = {
   electron: { electron: string; chromium: string } | null
   bun: string
   rustc: string | null
+  /** `go` line of apps/mygo/go.mod and the egoist/mygo requirement. */
+  mygo?: { goVersion: string | null; module: string | null } | null
+  swift?: { swift: string | null; xcode: string | null } | null
   apps: Partial<Record<AppId, AppInfo>>
   warnings: string[]
 }
