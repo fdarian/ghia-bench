@@ -291,6 +291,13 @@ impl TextInput {
     pub fn new(placeholder: &'static str, window: &mut Window, cx: &mut Context<Self>) -> Self {
         let focus_handle = cx.focus_handle();
         let blink = cx.new(|_| BlinkManager::new());
+        // The first frame can be drawn before the focus listeners below are active, so a window
+        // that opens already active and focused never delivers the focus event.
+        cx.defer_in(window, |this, window, cx| {
+            if this.focus_handle.is_focused(window) && window.is_window_active() {
+                this.blink.update(cx, BlinkManager::enable);
+            }
+        });
         let subscriptions = [
             cx.observe(&blink, |_, _, cx| cx.notify()),
             cx.on_focus(&focus_handle, window, |this, _, cx| {
