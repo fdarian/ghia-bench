@@ -36,7 +36,7 @@ private enum KeyCode {
 
 private let eventSource = CGEventSource(stateID: .privateState)
 
-private func mouseMove(to point: CGPoint, deltaY: Int, offsetNs: UInt64, local: CGPoint) throws -> PlannedInput {
+private func mouseMove(to point: CGPoint, deltaY: Int, offsetNs: UInt64) throws -> PlannedInput {
     guard let event = CGEvent(mouseEventSource: eventSource, mouseType: .mouseMoved, mouseCursorPosition: point, mouseButton: .left)
     else { throw HelperError("CGEvent mouseMoved creation failed") }
     event.setIntegerValueField(.mouseEventDeltaY, value: Int64(deltaY))
@@ -72,7 +72,7 @@ private func plan(name: String, geometry: Geometry) throws -> (setup: PlannedInp
     switch name {
     case "scroll":
         let point = geometry.global(x: listCentre.x, y: listCentre.y)
-        let setup = try mouseMove(to: point, deltaY: 0, offsetNs: 0, local: listCentre)
+        let setup = try mouseMove(to: point, deltaY: 0, offsetNs: 0)
         let perLeg = Int(rateHz) * 3
         // Negative wheel1 scrolls the content down (toward later rows); positive scrolls back up.
         let events = try (0..<(perLeg * 2)).map { index in
@@ -83,13 +83,12 @@ private func plan(name: String, geometry: Geometry) throws -> (setup: PlannedInp
         let perLeg = Int(rateHz) * 2
         let ys: [CGFloat] = (0..<perLeg).map { listTop + (listBottom - listTop) * CGFloat($0) / CGFloat(perLeg - 1) }
         let path = ys + ys.reversed()
-        let setup = try mouseMove(to: geometry.global(x: listCentre.x, y: listTop), deltaY: 0, offsetNs: 0, local: listCentre)
+        let setup = try mouseMove(to: geometry.global(x: listCentre.x, y: listTop), deltaY: 0, offsetNs: 0)
         var events: [PlannedInput] = []
         for (index, y) in path.enumerated() {
             let delta = index == 0 ? 0 : Int((y - path[index - 1]).rounded())
             events.append(try mouseMove(
-                to: geometry.global(x: listCentre.x, y: y), deltaY: delta, offsetNs: UInt64(index) * step,
-                local: CGPoint(x: listCentre.x, y: y)))
+                to: geometry.global(x: listCentre.x, y: y), deltaY: delta, offsetNs: UInt64(index) * step))
         }
         return (setup, events)
     case "type":
@@ -123,9 +122,17 @@ private func run(events: [PlannedInput], pid: pid_t, startTicks: UInt64) -> [Pos
     var posted: [PostedInput] = []
     posted.reserveCapacity(events.count)
     let done = DispatchSemaphore(value: 0)
+    var realtimeError: Error?
     let thread = Thread {
+        do {
+            try makeCurrentThreadRealtime(periodNs: 1_000_000_000 / rateHz, computationNs: 500_000, constraintNs: 2_000_000)
+        } catch { realtimeError = error }
         for planned in events {
-            mach_wait_until(startTicks + Mach.ticks(fromNs: planned.offsetNs))
+            let deadline = startTicks + Mach.ticks(fromNs: planned.offsetNs)
+            // Sleep to just short of the deadline, then spin: wake-up latency of a plain sleep is ~100s of us.
+            let spinTicks = Mach.ticks(fromNs: 300_000)
+            if mach_absolute_time() + spinTicks < deadline { mach_wait_until(deadline - spinTicks) }
+            while mach_absolute_time() < deadline {}
             let ticks = mach_absolute_time()
             planned.event.postToPid(pid)
             posted.append(PostedInput(tNs: Mach.ns(fromTicks: ticks), planned: planned))
@@ -133,8 +140,13 @@ private func run(events: [PlannedInput], pid: pid_t, startTicks: UInt64) -> [Pos
         done.signal()
     }
     thread.qualityOfService = .userInteractive
+    // Keeps the helper out of App Nap / timer coalescing for the duration of the phase.
+    let activity = ProcessInfo.processInfo.beginActivity(
+        options: [.userInitiated, .latencyCritical], reason: "benchmark input pacing")
+    defer { ProcessInfo.processInfo.endActivity(activity) }
     thread.start()
     done.wait()
+    if let realtimeError = realtimeError { warn("benchhelper: pacing thread is not real-time: \(realtimeError)") }
     return posted
 }
 
@@ -197,8 +209,15 @@ func phase(args: Args) throws -> [String: Any] {
         Mach.sleep(ns: captureLeadNs)
         if let setup = planned.setup {
             setup.event.postToPid(pid)
-            Mach.sleep(ns: 150_000_000)
+        } else {
+            // The first post of a process takes ~50 ms (connection setup); take it here, not on the first input.
+            guard let cursor = CGEvent(source: nil),
+                  let warmup = CGEvent(mouseEventSource: eventSource, mouseType: .mouseMoved,
+                                       mouseCursorPosition: cursor.location, mouseButton: .left)
+            else { throw HelperError("cannot create warm-up event") }
+            warmup.postToPid(pid)
         }
+        Mach.sleep(ns: 150_000_000)
         before = try sampleTree(root: pid)
         let startTicks = mach_absolute_time() + Mach.ticks(fromNs: 20_000_000)
         inputs = run(events: planned.events, pid: pid, startTicks: startTicks)

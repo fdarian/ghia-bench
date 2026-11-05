@@ -222,11 +222,9 @@ final class ReadyDetector {
     private var readyNs: UInt64?
     private var mapping: ContentMapping
     private let notBeforeNs: UInt64
-    private let displaySize: CGSize
 
-    init(mapping: ContentMapping, displaySize: CGSize, notBeforeNs: UInt64) {
+    init(mapping: ContentMapping, notBeforeNs: UInt64) {
         self.mapping = mapping
-        self.displaySize = displaySize
         self.notBeforeNs = notBeforeNs
     }
 

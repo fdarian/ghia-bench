@@ -31,6 +31,30 @@ private func spawn(bin: String, log: String?) throws -> pid_t {
     return pid
 }
 
+private func openApp(at path: String) throws -> pid_t {
+    let url = URL(fileURLWithPath: path)
+    var isDirectory: ObjCBool = false
+    guard FileManager.default.fileExists(atPath: path, isDirectory: &isDirectory), isDirectory.boolValue else {
+        throw HelperError("\(path) is not an app bundle")
+    }
+    let configuration = NSWorkspace.OpenConfiguration()
+    configuration.activates = true
+    configuration.createsNewApplicationInstance = true
+    configuration.addsToRecentItems = false
+    let semaphore = DispatchSemaphore(value: 0)
+    var app: NSRunningApplication?
+    var failure: Error?
+    NSWorkspace.shared.openApplication(at: url, configuration: configuration) { running, error in
+        app = running
+        failure = error
+        semaphore.signal()
+    }
+    guard semaphore.wait(timeout: .now() + 30) == .success else { throw HelperError("openApplication timed out") }
+    if let failure = failure { throw HelperError("openApplication failed: \(failure)") }
+    guard let app = app else { throw HelperError("openApplication returned no application") }
+    return app.processIdentifier
+}
+
 private final class LaunchCapture {
     let capture = FrameCapture()
     let detector: ReadyDetector
@@ -57,7 +81,7 @@ private func startDisplayCapture(refreshHz: Double, notBeforeNs: UInt64) throws 
     config.sourceRect = crop
     let mapping = ContentMapping(scaleX: 1, scaleY: 1, originX: 0, originY: 0, titlebar: expectedTitlebar)
     let launchCapture = LaunchCapture(detector: ReadyDetector(
-        mapping: mapping, displaySize: crop.size, notBeforeNs: notBeforeNs))
+        mapping: mapping, notBeforeNs: notBeforeNs))
     launchCapture.capture.onFrame = { [detector = launchCapture.detector] buffer, ns in
         detector.consume(buffer, displayNs: ns)
     }
@@ -67,15 +91,17 @@ private func startDisplayCapture(refreshHz: Double, notBeforeNs: UInt64) throws 
 }
 
 func launch(args: Args) throws -> [String: Any] {
-    let bin = try args.string("--bin")
+    let appPath = args.optionalString("--app")
+    let bin = args.optionalString("--bin")
+    guard (appPath == nil) != (bin == nil) else { throw HelperError("launch needs exactly one of --app or --bin") }
+    let label = appPath ?? bin ?? ""
     let timeoutMs = try args.optionalInt("--timeout-ms") ?? 20000
     let wantCapture = args.flag("--capture")
-    guard FileManager.default.isExecutableFile(atPath: bin) else { throw HelperError("\(bin) is not executable") }
+    if let bin = bin, !FileManager.default.isExecutableFile(atPath: bin) { throw HelperError("\(bin) is not executable") }
 
     let refreshHz = try probeRefreshHz()
     var launchCapture: LaunchCapture?
     var captureError: String?
-    // t0 is not known yet; every frame displayed before the spawn is ignored via notBeforeNs, set after.
     if wantCapture {
         do {
             launchCapture = try startDisplayCapture(refreshHz: refreshHz, notBeforeNs: Mach.nowNs())
@@ -86,33 +112,51 @@ func launch(args: Args) throws -> [String: Any] {
     defer { launchCapture?.capture.stop() }
 
     let t0Ticks = mach_absolute_time()
-    let pid = try spawn(bin: bin, log: args.optionalString("--log"))
+    let pid: pid_t
+    if let appPath = appPath {
+        pid = try openApp(at: appPath)
+    } else if let bin = bin {
+        pid = try spawn(bin: bin, log: args.optionalString("--log"))
+    } else {
+        throw HelperError("unreachable")
+    }
     let t0Ns = Mach.ns(fromTicks: t0Ticks)
 
     var windowVisibleNs: UInt64?
-    var windowFrame: CGRect?
+    var firstFrame: CGRect?
+    var settledFrame: CGRect?
+    var frameChangedNs: UInt64 = 0
     let deadlineNs = t0Ns + UInt64(timeoutMs) * 1_000_000
+    // The window server animates a new window's bounds (scale-in); wait until they stop moving.
+    let settleNs: UInt64 = 300_000_000
     var nextPoll = mach_absolute_time()
     do {
         while true {
             var status: Int32 = 0
-            if waitpid(pid, &status, WNOHANG) == pid {
-                throw HelperError("\(bin) exited during launch (status \(status))")
-            }
+            // LaunchServices apps are not our children, so waitpid cannot see them exit.
+            let exited = appPath == nil ? waitpid(pid, &status, WNOHANG) == pid : kill(pid, 0) != 0
+            if exited { throw HelperError("\(label) exited during launch") }
             let windows = try WindowList.list(onScreenOnly: true)
             let seenNs = Mach.nowNs()
-            if windowVisibleNs == nil, let window = WindowList.mainWindow(of: pid, in: windows), window.onScreen {
-                windowVisibleNs = seenNs
-                windowFrame = window.frame
-                let titlebar = Double(window.frame.height - contentHeight)
-                launchCapture?.detector.update(
-                    originX: Double(window.frame.minX - expectedOrigin.x),
-                    originY: Double(window.frame.minY - expectedOrigin.y), titlebar: titlebar)
+            if let window = WindowList.mainWindow(of: pid, in: windows) {
+                if windowVisibleNs == nil {
+                    windowVisibleNs = seenNs
+                    firstFrame = window.frame
+                }
+                if window.frame != settledFrame {
+                    settledFrame = window.frame
+                    frameChangedNs = seenNs
+                    launchCapture?.detector.update(
+                        originX: Double(window.frame.minX - expectedOrigin.x),
+                        originY: Double(window.frame.minY - expectedOrigin.y),
+                        titlebar: Double(window.frame.height - contentHeight))
+                }
             }
-            if windowVisibleNs != nil && (launchCapture == nil || launchCapture?.detector.contentReadyNs != nil) { break }
+            let ready = launchCapture == nil || launchCapture?.detector.contentReadyNs != nil
+            if windowVisibleNs != nil && ready && seenNs - frameChangedNs >= settleNs { break }
             if seenNs > deadlineNs {
                 if windowVisibleNs != nil {
-                    captureError = "content signature not seen within \(timeoutMs) ms"
+                    if !ready { captureError = "content signature not seen within \(timeoutMs) ms" }
                     break
                 }
                 throw HelperError("no on-screen window for pid \(pid) within \(timeoutMs) ms")
@@ -131,7 +175,8 @@ func launch(args: Args) throws -> [String: Any] {
         "pid": Int(pid),
         "t0Ns": t0Ns,
         "windowVisibleNs": nullable(windowVisibleNs),
-        "windowFrame": nullable(windowFrame.map(rectJSON)),
+        "windowFrame": nullable(settledFrame.map(rectJSON)),
+        "windowFrameAtVisible": nullable(firstFrame.map(rectJSON)),
         "contentReadyNs": nullable(launchCapture?.detector.contentReadyNs),
     ]
     if let captureError = captureError { result["captureError"] = captureError }

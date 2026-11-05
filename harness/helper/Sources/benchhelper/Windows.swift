@@ -1,3 +1,4 @@
+import AppKit
 import CoreGraphics
 import Foundation
 
@@ -100,6 +101,7 @@ func windowStatus(pid: pid_t) throws -> [String: Any] {
         "titlebarHeight": Double(ours.frame.height - contentHeight),
         "onScreen": ours.onScreen,
         "frontmost": ours.onScreen && blockers.isEmpty,
+        "appActive": NSWorkspace.shared.frontmostApplication?.processIdentifier == pid,
         "coveredFraction": Double(covered) / Double(grid * grid),
         "coveredBy": blockers.map {
             ["pid": Int($0.pid), "owner": nullable($0.owner), "frame": rectJSON($0.frame)] as [String: Any]

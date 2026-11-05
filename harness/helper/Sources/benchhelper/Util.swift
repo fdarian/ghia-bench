@@ -108,3 +108,17 @@ func sysctlUInt64(_ name: String) throws -> UInt64 {
     guard sysctlbyname(name, &value, &size, nil, 0) == 0 else { throw HelperError("sysctl \(name) failed") }
     return value
 }
+
+/// Plain sleeps wake ~1.5 ms late for a background-launched process; a time-constraint thread wakes on time.
+func makeCurrentThreadRealtime(periodNs: UInt64, computationNs: UInt64, constraintNs: UInt64) throws {
+    var policy = thread_time_constraint_policy_data_t(
+        period: UInt32(Mach.ticks(fromNs: periodNs)), computation: UInt32(Mach.ticks(fromNs: computationNs)),
+        constraint: UInt32(Mach.ticks(fromNs: constraintNs)), preemptible: 1)
+    let count = mach_msg_type_number_t(MemoryLayout<thread_time_constraint_policy_data_t>.size / MemoryLayout<integer_t>.size)
+    let result = withUnsafeMutablePointer(to: &policy) {
+        $0.withMemoryRebound(to: integer_t.self, capacity: Int(count)) {
+            thread_policy_set(mach_thread_self(), thread_policy_flavor_t(THREAD_TIME_CONSTRAINT_POLICY), $0, count)
+        }
+    }
+    guard result == KERN_SUCCESS else { throw HelperError("thread_policy_set failed: \(result)") }
+}
