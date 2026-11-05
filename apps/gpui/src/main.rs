@@ -1,6 +1,7 @@
 mod blink;
 mod data;
 mod input;
+mod scrollbar;
 #[cfg(feature = "snapshot")]
 mod snapshot;
 
@@ -13,6 +14,7 @@ use gpui_platform::application;
 
 use data::Message;
 use input::{InputChanged, TextInput};
+use scrollbar::Scrollbar;
 
 actions!(mailbox, [SelectNext, SelectPrevious, ClearSearch, Quit]);
 
@@ -48,6 +50,8 @@ struct Mailbox {
     search: Entity<TextInput>,
     list_scroll: UniformListScrollHandle,
     detail_scroll: ScrollHandle,
+    list_scrollbar: Entity<Scrollbar>,
+    detail_scrollbar: Entity<Scrollbar>,
     _search_subscription: gpui::Subscription,
 }
 
@@ -59,14 +63,26 @@ impl Mailbox {
             this.apply_filter(&query, cx);
         });
         let unread_count = messages.iter().filter(|m| m.unread).count();
+        let list_scroll = UniformListScrollHandle::new();
+        let detail_scroll = ScrollHandle::new();
+        let list_scrollbar = {
+            let handle = list_scroll.0.borrow().base_handle.clone();
+            cx.new(|_| Scrollbar::new(handle))
+        };
+        let detail_scrollbar = {
+            let handle = detail_scroll.clone();
+            cx.new(|_| Scrollbar::new(handle))
+        };
         Mailbox {
             filtered: (0..messages.len()).collect(),
             selected: Some(0),
             unread_count,
             messages,
             search,
-            list_scroll: UniformListScrollHandle::new(),
-            detail_scroll: ScrollHandle::new(),
+            list_scroll,
+            detail_scroll,
+            list_scrollbar,
+            detail_scrollbar,
             _search_subscription: subscription,
         }
     }
@@ -323,15 +339,22 @@ impl Mailbox {
                     .child(format!("{} conversations", with_thousands(self.filtered.len()))),
             )
             .child(
-                uniform_list(
-                    "messages",
-                    self.filtered.len(),
-                    cx.processor(|this, range: std::ops::Range<usize>, _, cx| {
-                        range.map(|position| this.render_row(position, cx)).collect()
-                    }),
-                )
-                .track_scroll(&self.list_scroll)
-                .flex_1(),
+                div()
+                    .relative()
+                    .flex_1()
+                    .min_h_0()
+                    .child(
+                        uniform_list(
+                            "messages",
+                            self.filtered.len(),
+                            cx.processor(|this, range: std::ops::Range<usize>, _, cx| {
+                                range.map(|position| this.render_row(position, cx)).collect()
+                            }),
+                        )
+                        .track_scroll(&self.list_scroll)
+                        .size_full(),
+                    )
+                    .child(scrollbar::overlay(&self.list_scrollbar)),
             )
     }
 
@@ -347,7 +370,7 @@ impl Mailbox {
                 .child("No message selected");
         };
         let message = &self.messages[self.filtered[position]];
-        pane.child(
+        pane.relative().child(
             div()
                 .id("detail")
                 .size_full()
@@ -421,6 +444,7 @@ impl Mailbox {
                         ),
                 ),
         )
+        .child(scrollbar::overlay(&self.detail_scrollbar))
     }
 }
 

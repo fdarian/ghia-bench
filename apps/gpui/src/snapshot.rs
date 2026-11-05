@@ -43,6 +43,9 @@ pub fn run(window: WindowHandle<Mailbox>, cx: &mut App) {
         settle().await;
         capture(&window, cx, &dir, "3-arrow-scrolled");
 
+        executor.timer(Duration::from_millis(600)).await;
+        capture(&window, cx, &dir, "3b-scrollbar-hidden");
+
         window
             .update(cx, |mailbox, _, cx| {
                 mailbox
