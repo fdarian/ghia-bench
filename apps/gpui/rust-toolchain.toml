@@ -1,0 +1,4 @@
+[toolchain]
+# Same channel as vendor/ghia/rust-toolchain.toml, which matches the pinned zed.
+channel = "1.97.1"
+profile = "minimal"

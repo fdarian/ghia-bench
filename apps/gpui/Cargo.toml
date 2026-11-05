@@ -1,0 +1,30 @@
+[package]
+name = "mailbox-gpui"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[[bin]]
+name = "Mailbox-GPUI"
+path = "src/main.rs"
+
+[dependencies]
+gpui = { path = "../../vendor/ghia/zed/crates/gpui" }
+gpui_platform = { path = "../../vendor/ghia/zed/crates/gpui_platform", features = ["font-kit"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+unicode-segmentation = "1"
+image = { version = "0.25", default-features = false, features = ["png"], optional = true }
+
+[features]
+# Writes a PNG of the window after the first frames and exits. Never part of the release build.
+snapshot = ["gpui/test-support", "dep:image"]
+
+[profile.release]
+lto = true
+
+# gpui pins `taffy = "=0.13.0"`; the vendored copy resolves `calc()` values, which
+# upstream returns 0 for. Same patch as vendor/ghia/packages/native/Cargo.toml, so the
+# gpui build is identical.
+[patch.crates-io]
+taffy = { path = "../../vendor/ghia/zed/third_party/taffy" }
