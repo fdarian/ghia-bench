@@ -1,5 +1,5 @@
 import type {
-  AppId, Frame, Input, LaunchRecord, LaunchResult, PhaseName, PhaseOutput, Proc, Sample, SessionRecord, WindowStatus,
+  AppId, Frame, Input, LaunchResult, PhaseName, PhaseOutput, Proc, Sample, SessionRecord, WindowStatus,
 } from "./types"
 
 const NS_PER_MS = 1e6
@@ -319,7 +319,15 @@ export type LaunchAnalysis = {
   contentReadyReason: string | null
 }
 
-export function analyzeLaunch(record: LaunchRecord): LaunchAnalysis | null {
+export type LaunchSource = {
+  app: AppId
+  index: number
+  discarded: boolean
+  launch: LaunchResult | null
+  sample: Sample | null
+}
+
+export function analyzeLaunch(record: LaunchSource): LaunchAnalysis | null {
   if (!record.launch) return null
   const startup = startupMs(record.launch)
   return {

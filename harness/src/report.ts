@@ -1,0 +1,440 @@
+import { readFileSync, writeFileSync } from "node:fs"
+import { join } from "node:path"
+import {
+  analyzeLaunch, analyzeSession, percentile, summarize,
+  type LaunchAnalysis, type PhaseAnalysis, type SessionAnalysis, type Summary,
+} from "./analysis"
+import { ELECTRON_GROUPS } from "./analysis"
+import type { AppId, Env, LaunchRecord, PhaseName, RunRecord, SessionRecord } from "./types"
+import { APP_IDS, APP_LABELS, INPUT_PHASES, PHASE_NAMES } from "./types"
+
+const MIB = 1024 * 1024
+
+export function readRuns(dir: string): RunRecord[] {
+  return readFileSync(join(dir, "runs.jsonl"), "utf8")
+    .split("\n")
+    .filter((line) => line.trim() !== "")
+    .map((line, index) => {
+      try {
+        return JSON.parse(line) as RunRecord
+      } catch (error) {
+        throw new Error(`runs.jsonl line ${index + 1} is not JSON: ${(error as Error).message}`)
+      }
+    })
+}
+
+export function readEnv(dir: string): Env {
+  return JSON.parse(readFileSync(join(dir, "env.json"), "utf8")) as Env
+}
+
+function digitsFor(value: number): number {
+  const magnitude = Math.abs(value)
+  if (magnitude >= 100) return 0
+  if (magnitude >= 10) return 1
+  return 2
+}
+
+function num(value: number): string {
+  return value.toFixed(digitsFor(value))
+}
+
+function medianRange(summary: Summary | null): string {
+  if (!summary) return "–"
+  if (summary.n === 1) return num(summary.median)
+  return `${num(summary.median)} [${num(summary.min)}–${num(summary.max)}]`
+}
+
+function medianRangeOf(values: number[], scale = 1): string {
+  return medianRange(summarize(values.map((value) => value / scale)))
+}
+
+function pooledPercentiles(values: number[], points: number[]): string {
+  if (values.length === 0) return "–"
+  return points.map((point) => num(percentile(values, point))).join(" / ")
+}
+
+function present(values: (number | null | undefined)[]): number[] {
+  return values.filter((value): value is number => value !== null && value !== undefined)
+}
+
+function countBy<T>(items: T[], key: (item: T) => string): [string, number][] {
+  const counts = new Map<string, number>()
+  for (const item of items) counts.set(key(item), (counts.get(key(item)) ?? 0) + 1)
+  return [...counts.entries()]
+}
+
+function definedItems<T>(items: (T | null)[]): T[] {
+  return items.filter((item): item is T => item !== null)
+}
+
+function escapeCell(text: string): string {
+  return text.replace(/\|/g, "\\|").replace(/\n/g, " ")
+}
+
+function table(header: string[], rows: string[][]): string {
+  const lines = [`| ${header.join(" | ")} |`, `| ${header.map((_, index) => (index === 0 ? "---" : "---:")).join(" | ")} |`]
+  for (const row of rows) lines.push(`| ${row.map(escapeCell).join(" | ")} |`)
+  return lines.join("\n")
+}
+
+function plainTable(header: string[], rows: string[][]): string {
+  const lines = [`| ${header.join(" | ")} |`, `| ${header.map(() => "---").join(" | ")} |`]
+  for (const row of rows) lines.push(`| ${row.map(escapeCell).join(" | ")} |`)
+  return lines.join("\n")
+}
+
+type AppData = {
+  app: AppId
+  launches: LaunchAnalysis[]
+  startupFromSessions: boolean
+  sessions: { record: SessionRecord; analysis: SessionAnalysis }[]
+  /** Sessions whose frame and latency metrics are used. */
+  frameSessions: { record: SessionRecord; analysis: SessionAnalysis }[]
+}
+
+function collect(env: Env, records: RunRecord[], includeInvalid: boolean): AppData[] {
+  return APP_IDS.filter((app) => records.some((record) => record.app === app)).map((app) => {
+    const launchRecords = records.filter((record): record is LaunchRecord => record.type === "launch" && record.app === app)
+    const sessionRecords = records.filter((record): record is SessionRecord => record.type === "session" && record.app === app)
+    const sessions = sessionRecords.map((record) => ({ record, analysis: analyzeSession(record, env.display.refreshHz) }))
+    const kept = definedItems(launchRecords.filter((record) => !record.discarded).map(analyzeLaunch))
+    const startupFromSessions = kept.length === 0
+    const launches = startupFromSessions
+      ? definedItems(sessionRecords.map((record) => analyzeLaunch({
+        app, index: record.round, discarded: false, launch: record.launch, sample: null,
+      })))
+      : kept
+    return {
+      app,
+      launches,
+      startupFromSessions,
+      sessions,
+      frameSessions: includeInvalid ? sessions : sessions.filter((session) => session.analysis.frameValidity.valid),
+    }
+  })
+}
+
+type Row = { label: string; cells: string[] } | { heading: string }
+
+function phaseOf(session: { analysis: SessionAnalysis }, name: PhaseName): PhaseAnalysis | undefined {
+  return session.analysis.phases[name]
+}
+
+function phaseValues(
+  sessions: AppData["sessions"], name: PhaseName, pick: (phase: PhaseAnalysis) => number | null | undefined,
+): number[] {
+  return present(sessions.map((session) => {
+    const phase = phaseOf(session, name)
+    return phase ? pick(phase) : null
+  }))
+}
+
+function usageRows(data: AppData[], name: PhaseName): Row[] {
+  const spec: { label: string; scale: number; pick: (phase: PhaseAnalysis) => number | null }[] = [
+    { label: "CPU (% of one core)", scale: 1, pick: (phase) => phase.usage.cpuPct },
+    { label: "CPU time (ms)", scale: 1, pick: (phase) => phase.usage.cpuMs },
+    { label: "Instructions (millions)", scale: 1e6, pick: (phase) => phase.usage.instructions },
+    { label: "Cycles (millions)", scale: 1e6, pick: (phase) => phase.usage.cycles },
+    { label: "Energy (mJ)", scale: 1, pick: (phase) => phase.usage.energyMj },
+    { label: "Wakeups (per s)", scale: 1, pick: (phase) => phase.usage.wakeupsPerSec },
+  ]
+  return spec.map((entry) => ({
+    label: entry.label,
+    cells: data.map((app) => medianRangeOf(phaseValues(app.sessions, name, entry.pick), entry.scale)),
+  }))
+}
+
+function frameCell(
+  data: AppData, name: PhaseName, pick: (phase: PhaseAnalysis) => number | null | undefined, scale = 1,
+): string {
+  return medianRangeOf(phaseValues(data.frameSessions, name, pick), scale)
+}
+
+function pooledMotion(data: AppData, name: PhaseName): number[] {
+  const intervals: number[] = []
+  for (const session of data.frameSessions) {
+    const phase = phaseOf(session, name)
+    if (phase && phase.motion) intervals.push(...phase.motion.intervalsMs)
+  }
+  return intervals
+}
+
+function pooledKeys(
+  data: AppData, name: PhaseName, pick: (phase: PhaseAnalysis) => (number | null)[] | null | undefined,
+): { values: number[]; noChange: number; total: number } {
+  const values: number[] = []
+  let total = 0
+  for (const session of data.frameSessions) {
+    const phase = phaseOf(session, name)
+    const latencies = phase ? pick(phase) : null
+    if (!latencies) continue
+    total += latencies.length
+    values.push(...present(latencies))
+  }
+  return { values, noChange: total - values.length, total }
+}
+
+function keyCells(data: AppData[], name: PhaseName, pick: (phase: PhaseAnalysis) => (number | null)[] | null | undefined) {
+  return {
+    percentiles: data.map((app) => pooledPercentiles(pooledKeys(app, name, pick).values, [50, 95])),
+    noChange: data.map((app) => {
+      const keys = pooledKeys(app, name, pick)
+      return keys.total === 0 ? "–" : `${keys.noChange} / ${keys.total}`
+    }),
+  }
+}
+
+function summaryRows(env: Env, data: AppData[]): Row[] {
+  const rows: Row[] = []
+  const cells = (make: (app: AppData) => string) => data.map(make)
+  rows.push({ heading: "Samples" })
+  rows.push({ label: "Startup launches kept", cells: cells((app) => `${app.launches.length}${app.startupFromSessions ? " (from sessions)" : ""}`) })
+  rows.push({ label: "Sessions (frame metrics valid / total)", cells: cells((app) => `${app.frameSessions.length} / ${app.sessions.length}`) })
+
+  rows.push({ heading: "Startup" })
+  rows.push({ label: "Window visible (ms)", cells: cells((app) => medianRangeOf(present(app.launches.map((launch) => launch.windowVisibleMs)))) })
+  rows.push({ label: "Content ready (ms)", cells: cells((app) => medianRangeOf(present(app.launches.map((launch) => launch.contentReadyMs)))) })
+  rows.push({ label: "Footprint at launch + 1 s (MiB)", cells: cells((app) => medianRangeOf(present(app.launches.map((launch) => launch.footprint)), MIB)) })
+
+  rows.push({ heading: "Idle (10 s)" })
+  rows.push(...usageRows(data, "idle"))
+  rows.push({ label: "Frames presented", cells: cells((app) => frameCell(app, "idle", (phase) => phase.idleFrames)) })
+  rows.push({ label: "Footprint after idle (MiB)", cells: cells((app) => medianRangeOf(phaseValues(app.sessions, "idle", (phase) => phase.footprint), MIB)) })
+
+  for (const name of ["scroll", "hover"] as const) {
+    rows.push({ heading: name === "scroll" ? "Scroll (3 s down, 3 s up, 120 events/s)" : "Hover (2 s down, 2 s up, 120 moves/s)" })
+    rows.push(...usageRows(data, name))
+    rows.push({ label: "Frames between first and last input", cells: cells((app) => frameCell(app, name, (phase) => phase.motion?.frames)) })
+    rows.push({ label: "Frame rate (fps, higher is better)", cells: cells((app) => frameCell(app, name, (phase) => phase.motion?.fps)) })
+    rows.push({ label: "Frame interval p50 / p95 / p99 (ms, pooled)", cells: cells((app) => pooledPercentiles(pooledMotion(app, name), [50, 95, 99])) })
+    rows.push({ label: `Long frames (> ${num(1500 / env.display.refreshHz)} ms)`, cells: cells((app) => frameCell(app, name, (phase) => phase.motion?.longFrames)) })
+    rows.push({ label: "First-input latency (ms)", cells: cells((app) => frameCell(app, name, (phase) => phase.motion?.firstInputLatencyMs)) })
+  }
+
+  rows.push({ heading: "Type (\"quarterly report\", then 16 backspaces, 150 ms per key)" })
+  rows.push(...usageRows(data, "type"))
+  const echo = keyCells(data, "type", (phase) => phase.echoMs)
+  const result = keyCells(data, "type", (phase) => phase.resultMs)
+  rows.push({ label: "Echo latency p50 / p95 (ms, pooled per key)", cells: echo.percentiles })
+  rows.push({ label: "Echo: keys with no visible change", cells: echo.noChange })
+  rows.push({ label: "Result latency p50 / p95 (ms, pooled per key)", cells: result.percentiles })
+  rows.push({ label: "Result: keys with no visible change", cells: result.noChange })
+
+  rows.push({ heading: "Navigate (30 x ArrowDown, 120 ms per key)" })
+  rows.push(...usageRows(data, "navigate"))
+  const detail = keyCells(data, "navigate", (phase) => phase.detailMs)
+  rows.push({ label: "Detail latency p50 / p95 (ms, pooled per key)", cells: detail.percentiles })
+  rows.push({ label: "Detail: keys with no visible change", cells: detail.noChange })
+
+  rows.push({ heading: "After workload" })
+  rows.push({ label: "Footprint after workload (MiB)", cells: cells((app) => medianRangeOf(present(app.sessions.map((session) => session.analysis.workloadFootprint)), MIB)) })
+
+  rows.push({ heading: "Size" })
+  rows.push({ label: "App bundle (MiB, du -sk)", cells: cells((app) => (env.apps[app.app] ? num(env.apps[app.app]!.bundleKb / 1024) : "–")) })
+  rows.push({ label: "Main executable (MiB)", cells: cells((app) => (env.apps[app.app] ? num(env.apps[app.app]!.executableBytes / MIB) : "–")) })
+  return rows
+}
+
+function renderSummary(env: Env, data: AppData[]): string {
+  const header = ["Metric", ...data.map((app) => APP_LABELS[app.app])]
+  const lines = [`| ${header.join(" | ")} |`, `| --- | ${data.map(() => "---:").join(" | ")} |`]
+  const sections: { heading: string; rows: { label: string; cells: string[] }[] }[] = []
+  for (const row of summaryRows(env, data)) {
+    if ("heading" in row) sections.push({ heading: row.heading, rows: [] })
+    else sections[sections.length - 1].rows.push(row)
+  }
+  for (const section of sections) {
+    const empty = section.rows.length > 0 && section.rows.every((row) => row.cells.every((cell) => cell === "–"))
+    lines.push(`| **${section.heading}**${empty ? " (not measured, see Validity)" : ""} | ${data.map(() => "").join(" | ")} |`)
+    if (empty) continue
+    for (const row of section.rows) lines.push(`| ${escapeCell(row.label)} | ${row.cells.map(escapeCell).join(" | ")} |`)
+  }
+  return lines.join("\n")
+}
+
+function renderElectronBreakdown(data: AppData[]): string | null {
+  const electron = data.find((app) => app.app === "electron")
+  if (!electron || electron.sessions.length === 0) return null
+  const phases: PhaseName[] = PHASE_NAMES
+  const groupNames = [...ELECTRON_GROUPS]
+  const rows = [...groupNames, "total"].map((group) => {
+    const footprint = (kind: "idle" | "workload") => {
+      const values = present(electron.sessions.map((session) => {
+        if (group === "total") {
+          return kind === "idle" ? phaseOf(session, "idle")?.footprint : session.analysis.workloadFootprint
+        }
+        const byGroup = kind === "idle" ? phaseOf(session, "idle")?.groupFootprint : session.analysis.workloadGroupFootprint
+        return byGroup ? byGroup[group] : null
+      }))
+      return medianRangeOf(values, MIB)
+    }
+    const cpu = (name: PhaseName) => medianRangeOf(present(electron.sessions.map((session) => {
+      const phase = phaseOf(session, name)
+      if (!phase) return null
+      if (group === "total") return phase.usage.cpuPct
+      const usage = phase.groups[group]
+      return usage ? usage.cpuPct : null
+    })))
+    return [group, footprint("idle"), footprint("workload"), ...phases.map(cpu)]
+  })
+  return table(
+    ["Process group", "Footprint after idle (MiB)", "Footprint after workload (MiB)", ...phases.map((name) => `CPU % ${name}`)],
+    rows,
+  ) + "\n\nMedian [min–max] across sessions. Groups come from the process name: main = the root pid, renderer / GPU = the matching Helper, network/utility = the plain `Helper`, other = anything else. A group that did not exist in a session is left out of that median; footprints are `phys_footprint`, which can double-count shared pages across processes."
+}
+
+function bulletList(items: string[]): string {
+  return items.map((item) => `- ${item}`).join("\n")
+}
+
+function renderEnvironment(env: Env): string {
+  const lines = [
+    `Run started ${env.startedAt}; apps ${env.args.apps.join(", ")}; ${env.args.launches} startup launches and ${env.args.rounds} sessions per app.`,
+    `macOS ${env.macos}, ${env.chip} (${env.cpuCores} cores), ${(env.memBytes / 2 ** 30).toFixed(0)} GiB RAM.`,
+    `Main display ${env.display.widthPt} x ${env.display.heightPt} pt, scale ${env.display.scale}, ${env.display.refreshHz} Hz.`,
+    `Load average (1/5/15 min) at start: ${env.loadAverage.map((value) => value.toFixed(2)).join(" / ")}.`,
+    `Ghia ${env.ghia.sha ?? "unknown"}, zed ${env.ghia.zedSha ?? "unknown"}.`,
+    `Electron ${env.electron ? `${env.electron.electron}, Chromium ${env.electron.chromium}` : "unknown"}.`,
+    `Bun ${env.bun}, ${env.rustc ?? "rustc unknown"}.`,
+    `Frame capture: ${env.capture.enabled ? "on" : "off"} (${env.capture.reason}). Input: ${env.input.enabled ? "on" : "off"} (${env.input.reason}).`,
+  ]
+  for (const app of env.args.apps) {
+    const info = env.apps[app]
+    if (!info) continue
+    const largest = info.largeExecutables.slice(0, 3).map((file) => `${file.path} ${(file.bytes / MIB).toFixed(1)} MiB`).join("; ")
+    lines.push(`${APP_LABELS[app]}: ${(info.bundleKb / 1024).toFixed(1)} MiB bundle, executable \`${info.executable}\` ${(info.executableBytes / MIB).toFixed(1)} MiB${largest ? `; largest code files: ${largest}` : ""}.`)
+  }
+  return bulletList(lines)
+}
+
+function renderValidity(env: Env, records: RunRecord[], data: AppData[], includeInvalid: boolean): string {
+  const sections: string[] = []
+  const sessionRecords = records.filter((record): record is SessionRecord => record.type === "session")
+  const launchRecords = records.filter((record): record is LaunchRecord => record.type === "launch")
+
+  const headline = [
+    `Frame capture ${env.capture.enabled ? "was on" : "was OFF"}: ${env.capture.reason}.`,
+    `Input phases ${env.input.enabled ? "ran" : "were SKIPPED"}: ${env.input.reason}.`,
+  ]
+  if (includeInvalid) headline.push("This report INCLUDES sessions whose frame and latency metrics are marked invalid below.")
+  sections.push(bulletList(headline))
+
+  const skipped: string[][] = []
+  for (const app of data) {
+    const entries: { phase: PhaseName; reason: string }[] = []
+    for (const record of sessionRecords.filter((candidate) => candidate.app === app.app)) {
+      for (const name of PHASE_NAMES) {
+        const phase = record.phases[name]
+        if (phase.status === "skipped") entries.push({ phase: name, reason: phase.reason })
+      }
+    }
+    for (const reasonEntry of countBy(entries, (entry) => entry.reason)) {
+      const phases = PHASE_NAMES.filter((name) => entries.some((entry) => entry.phase === name && entry.reason === reasonEntry[0]))
+      skipped.push([APP_LABELS[app.app], phases.join(", "), String(reasonEntry[1]), reasonEntry[0]])
+    }
+  }
+  sections.push("### Skipped phases\n\n" + (skipped.length > 0 ? plainTable(["App", "Phases", "Skipped (phase x session)", "Reason"], skipped) : "None."))
+
+  const contentMissing = data.map((app) => {
+    const launches = app.launches
+    const missing = launches.filter((launch) => launch.contentReadyMs === null)
+    if (missing.length === 0) return null
+    const reasons = [...new Set(missing.map((launch) => launch.contentReadyReason ?? "capture off"))]
+    return [APP_LABELS[app.app], `${missing.length} / ${launches.length}`, reasons.join("; ")]
+  }).filter((row): row is string[] => row !== null)
+  sections.push("### Content-ready not measured\n\n" + (contentMissing.length > 0 ? plainTable(["App", "Launches", "Reason"], contentMissing) : "None."))
+
+  const invalid = sessionRecords.map((record) => {
+    const session = data.find((app) => app.app === record.app)?.sessions.find((entry) => entry.record === record)
+    return session && !session.analysis.frameValidity.valid
+      ? [APP_LABELS[record.app], String(record.round + 1), session.analysis.frameValidity.reasons.join("; ")]
+      : null
+  }).filter((row): row is string[] => row !== null)
+  const invalidGrouped = countBy(invalid, (row) => `${row[0]}\u0000${row[2]}`).map((entry) => {
+    const parts = entry[0].split("\u0000")
+    const rounds = invalid.filter((row) => row[0] === parts[0] && row[2] === parts[1]).map((row) => row[1]).join(", ")
+    return [parts[0], rounds, parts[1]]
+  })
+  sections.push(
+    `### Sessions with invalid frame and latency metrics${includeInvalid ? " (included in the numbers above)" : " (excluded from the numbers above)"}\n\n`
+    + (invalidGrouped.length > 0 ? plainTable(["App", "Rounds", "Reason"], invalidGrouped) : "None.")
+    + "\n\nCPU, instruction, energy, wakeup and memory metrics of those sessions are still used.",
+  )
+
+  const captureErrors: string[][] = []
+  const phaseErrors: string[][] = []
+  const stderrNotes: string[][] = []
+  for (const record of sessionRecords) {
+    for (const name of PHASE_NAMES) {
+      const phase = record.phases[name]
+      if (phase.status === "error") phaseErrors.push([APP_LABELS[record.app], name, phase.error])
+      if (phase.status === "ok" && phase.data.captureError) captureErrors.push([APP_LABELS[record.app], name, phase.data.captureError])
+      if (phase.status === "ok" && phase.helperStderr) stderrNotes.push([APP_LABELS[record.app], name, phase.helperStderr])
+    }
+  }
+  const group = (rows: string[][], header: string[]) => rows.length === 0 ? "None." : plainTable(
+    [...header, "Count"],
+    countBy(rows, (row) => row.join("\u0000")).map((entry) => [...entry[0].split("\u0000"), String(entry[1])]),
+  )
+  sections.push("### Capture errors reported by the helper\n\n" + group(captureErrors, ["App", "Phase", "Error"]))
+  sections.push("### Phase errors\n\n" + group(phaseErrors, ["App", "Phase", "Error"]))
+  sections.push("### Helper warnings (stderr of successful phases)\n\n" + group(stderrNotes, ["App", "Phase", "Message"]))
+
+  const stepErrors: string[][] = []
+  for (const record of [...sessionRecords, ...launchRecords]) {
+    for (const entry of record.errors) stepErrors.push([APP_LABELS[record.app], record.type, entry.step, entry.error])
+  }
+  sections.push("### Other step errors\n\n" + group(stepErrors, ["App", "Record", "Step", "Error"]))
+
+  const churn: string[] = []
+  for (const app of data) {
+    let lost = 0
+    for (const session of app.sessions) {
+      for (const name of PHASE_NAMES) {
+        const phase = phaseOf(session, name)
+        if (phase && phase.usage.exitedProcesses > 0) lost += 1
+      }
+    }
+    if (lost > 0) churn.push(`${APP_LABELS[app.app]}: ${lost} phase measurement(s) had a process exit mid-phase; its cost is not in the totals.`)
+  }
+  const quits = [...sessionRecords, ...launchRecords].filter((record) => record.quit !== null)
+  const killed = quits.filter((record) => record.quit!.sigkilled.length > 0)
+  const notTerm = quits.filter((record) => record.quit!.sigtermExitMs === null)
+  const loadRecords = [...sessionRecords, ...launchRecords]
+  const loads = loadRecords.flatMap((record) => [record.loadBefore[0], record.loadAfter[0]])
+  const other = [
+    ...churn,
+    `${killed.length} of ${quits.length} quits needed SIGKILL on a straggler; ${notTerm.length} root processes ignored SIGTERM for 3 s.`,
+    loads.length > 0 ? `1-minute load average around runs: median ${percentile(loads, 50).toFixed(1)}, max ${Math.max(...loads).toFixed(1)} (${env.cpuCores} cores).` : "",
+  ].filter((line) => line !== "")
+  sections.push("### Other notes\n\n" + bulletList(other))
+  return sections.join("\n\n")
+}
+
+const METHOD_NOTES = [
+  "Every metric is lower is better unless marked. Cells are median [min–max] over sessions (or startup launches); latency, interval and p50 / p95 cells pool every key or frame across valid sessions. – means no data; the reason is under Validity.",
+  "Startup is measured from the mach time just before the launch call. Window visible = first poll that sees an on-screen window of the pid; content ready = first captured frame matching the Mailbox signature. The first startup launch per app is discarded.",
+  "CPU, instructions, cycles, energy and wakeups are rusage deltas summed over the app's whole process tree during the phase. Processes that first appear during a phase count from zero.",
+  "Frame counts include the search caret's blink, which repaints the search region, so an idle app with a blinking caret shows a few frames.",
+  "Echo latency = first frame after a keyDown in which the search box changed; result latency = first frame in which the list or the count changed; only frames before the next keyDown count, otherwise the key has no visible change. Detail latency (navigate) uses the detail pane the same way. Long frames are intervals over 1.5 x the refresh interval.",
+]
+
+export function buildReport(env: Env, records: RunRecord[], options: { includeInvalid: boolean }): string {
+  const data = collect(env, records, options.includeInvalid)
+  const parts = [
+    "# ghia-bench report",
+    "## Environment",
+    renderEnvironment(env),
+    "## Summary",
+    renderSummary(env, data),
+    bulletList(METHOD_NOTES),
+  ]
+  const breakdown = renderElectronBreakdown(data)
+  if (breakdown) parts.push("## Electron per-process breakdown", breakdown)
+  parts.push("## Validity", renderValidity(env, records, data, options.includeInvalid))
+  return parts.join("\n\n") + "\n"
+}
+
+export function writeReport(dir: string, options: { includeInvalid: boolean } = { includeInvalid: false }): void {
+  writeFileSync(join(dir, "report.md"), buildReport(readEnv(dir), readRuns(dir), options))
+}
