@@ -1,0 +1,7 @@
+{
+  "name": "Mailbox-MyGo",
+  "identifier": "dev.ghiabench.mailbox-mygo",
+  "version": "0.1.0",
+  "resources": ["../../data/messages.json"],
+  "out": "build"
+}
