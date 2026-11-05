@@ -6,8 +6,15 @@ import { appSpec } from "./apps"
 import type { AppId, AppInfo, Env, Probe } from "./types"
 import { APP_IDS } from "./types"
 
+const bundleOverrides: Partial<Record<AppId, string>> = {}
+
+/** Points an app at a bundle other than dist/<its bundle> (history records build Ghia into dist/history/). */
+export function overrideBundles(overrides: Partial<Record<AppId, string>>): void {
+  Object.assign(bundleOverrides, overrides)
+}
+
 export function bundlePath(app: AppId): string {
-  return join(REPO_ROOT, "dist", appSpec(app).bundle)
+  return bundleOverrides[app] ?? join(REPO_ROOT, "dist", appSpec(app).bundle)
 }
 
 export function existingApps(): AppId[] {
@@ -87,6 +94,7 @@ export function mygoModule(goMod: string): { goVersion: string | null; module: s
 export type EnvInputs = {
   startedAt: string
   args: Env["args"]
+  ghiaSource?: string
   probe: Probe
   capture: Env["capture"]
   input: Env["input"]
@@ -115,8 +123,9 @@ export async function collectEnv(inputs: EnvInputs): Promise<Env> {
   const buildVersion = await attempt("sw_vers", () => exec(["sw_vers", "-buildVersion"]))
   const scrollBars = await attempt("AppleShowScrollBars", showScrollBars)
   const ghiaDir = join(REPO_ROOT, "vendor", "ghia")
-  const ghiaSha = await attempt("vendor/ghia SHA", () => exec(["git", "-C", ghiaDir, "rev-parse", "HEAD"]))
-  const zedSha = await attempt("vendor/ghia/zed SHA", () => exec(["git", "-C", join(ghiaDir, "zed"), "rev-parse", "HEAD"]))
+  const vendored = inputs.ghiaSource === undefined
+  const ghiaSha = vendored ? await attempt("vendor/ghia SHA", () => exec(["git", "-C", ghiaDir, "rev-parse", "HEAD"])) : null
+  const zedSha = vendored ? await attempt("vendor/ghia/zed SHA", () => exec(["git", "-C", join(ghiaDir, "zed"), "rev-parse", "HEAD"])) : null
   const electron = inputs.args.apps.includes("electron") ? await attempt("Electron version", electronVersions) : null
   const rustc = await attempt("rustc --version", () => exec(["rustc", "--version"], { cwd: join(REPO_ROOT, "apps", "gpui") }))
 
@@ -150,6 +159,7 @@ export async function collectEnv(inputs: EnvInputs): Promise<Env> {
     loadAverage: currentLoadAverage(),
     cpuCores: cpus().length,
     ghia: { sha: ghiaSha, zedSha },
+    ghiaSource: inputs.ghiaSource,
     electron,
     bun: Bun.version,
     rustc,

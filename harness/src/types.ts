@@ -144,7 +144,7 @@ export type AppInfo = {
 
 export type Env = {
   startedAt: string
-  args: { apps: AppId[]; rounds: number; launches: number; capture: string; out: string }
+  args: { apps: AppId[]; rounds: number; launches: number; capture: string; out: string; bundles?: Partial<Record<AppId, string>> }
   capture: { enabled: boolean; reason: string }
   input: { enabled: boolean; reason: string }
   probe: Probe
@@ -157,6 +157,8 @@ export type Env = {
   loadAverage: number[]
   cpuCores: number
   ghia: { sha: string | null; zedSha: string | null }
+  /** What the Ghia bundle was built from when it is not vendor/ghia (a history record), e.g. "npm @ghia/solid + @ghia/native 0.11.0". */
+  ghiaSource?: string
   electron: { electron: string; chromium: string } | null
   bun: string
   rustc: string | null

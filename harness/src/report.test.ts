@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import { buildReport } from "./report"
+import { buildReport, summaryMetrics } from "./report"
 import type { Env, Frame, Input, PhaseOutput, Proc, Sample, SessionRecord, WindowStatus } from "./types"
 
 const MS = 1e6
@@ -120,5 +120,37 @@ describe("buildReport", () => {
     const report = buildReport(env, records, { includeInvalid: true })
     expect(report).toContain("| Sessions (window active and uncovered / total) | 2 / 2 |")
     expect(report).toContain("INCLUDES sessions")
+  })
+})
+
+describe("summaryMetrics", () => {
+  const records = [session(0, true), session(1, false)]
+  const metrics = summaryMetrics(env, records)
+  const numbers = (key: string) => metrics.find((metric) => metric.key === key)!.cells.electron!.numbers
+
+  test("carries the numbers behind the table cells, with unique keys", () => {
+    expect(new Set(metrics.map((metric) => metric.key)).size).toBe(metrics.length)
+    expect(numbers("startup.windowVisibleMs")).toEqual([400])
+    expect(numbers("scroll.appFrames")).toEqual([6])
+    expect(numbers("samples.sessions")).toEqual([1, 2])
+    expect(numbers("type.resultNoChange")).toEqual([1, 2])
+    expect(numbers("idle.cpuPct")).toEqual([10])
+  })
+
+  test("percentile cells list p50 then p95", () => {
+    const echo = numbers("type.echoMs")
+    expect(echo).toHaveLength(2)
+    expect(echo[0]).toBeCloseTo(13.5)
+    expect(echo[1]).toBeCloseTo(14.8, 1)
+  })
+
+  test("cells without data have no numbers", () => {
+    expect(numbers("hover.fps")).toEqual([])
+  })
+
+  test("sections and labels are the table's", () => {
+    const row = metrics.find((metric) => metric.key === "idle.instructionsM")!
+    expect(row.section).toBe("Idle (10 s)")
+    expect(row.label).toBe("Instructions (millions)")
   })
 })

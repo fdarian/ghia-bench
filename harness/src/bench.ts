@@ -3,6 +3,7 @@ import { parseArgs } from "node:util"
 import { check } from "./check"
 import { existingApps } from "./env"
 import { REPO_ROOT } from "./helper"
+import { recordHistory, writeHistoryReport } from "./history"
 import { readEnv, writeReport } from "./report"
 import { runBench, type CaptureMode } from "./run"
 import { APP_IDS, type AppId } from "./types"
@@ -10,7 +11,9 @@ import { APP_IDS, type AppId } from "./types"
 const USAGE = `usage:
   bun harness/src/bench.ts check
   bun harness/src/bench.ts run [--apps electron,ghia,gpui,swiftui,mygo] [--rounds 5] [--launches 10] [--capture auto|on|off] [--allow-missing-permissions] [--out results/<ISO>]
-  bun harness/src/bench.ts report <results dir> [--include-invalid]`
+  bun harness/src/bench.ts report <results dir> [--include-invalid]
+  bun harness/src/bench.ts history record <npm version | git sha> [--rounds 5] [--launches 10] [--capture auto|on|off]
+  bun harness/src/bench.ts history report`
 
 function positiveInt(name: string, text: string, min: number): number {
   const value = Number(text)
@@ -69,6 +72,30 @@ async function main(): Promise<void> {
       readEnv(dir)
       writeReport(dir, { includeInvalid: parsed.values["include-invalid"] ?? false })
       console.log(`wrote ${dir}/report.md`)
+      return
+    }
+    case "history": {
+      const sub = rest[0]
+      if (sub === "report") {
+        if (rest.length !== 1) throw new Error(USAGE)
+        writeHistoryReport()
+        return
+      }
+      if (sub !== "record") throw new Error(USAGE)
+      const parsed = parseArgs({
+        args: rest.slice(1),
+        options: { rounds: { type: "string", default: "5" }, launches: { type: "string", default: "10" }, capture: { type: "string", default: "auto" } },
+        allowPositionals: true,
+      })
+      if (parsed.positionals.length !== 1) throw new Error(USAGE)
+      const capture = parsed.values.capture
+      if (capture !== "auto" && capture !== "on" && capture !== "off") throw new Error(`--capture must be auto, on or off, got ${capture}`)
+      await recordHistory({
+        target: parsed.positionals[0],
+        rounds: positiveInt("rounds", parsed.values.rounds!, 1),
+        launches: positiveInt("launches", parsed.values.launches!, 0),
+        capture: capture as CaptureMode,
+      }, Bun.argv.slice(2))
       return
     }
     default:

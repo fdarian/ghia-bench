@@ -34,7 +34,7 @@ function digitsFor(value: number): number {
   return 2
 }
 
-function num(value: number): string {
+export function num(value: number): string {
   return Number.isInteger(value) ? value.toFixed(0) : value.toFixed(digitsFor(value))
 }
 
@@ -51,6 +51,22 @@ function medianRangeOf(values: number[], scale = 1): string {
 function pooledPercentiles(values: number[], points: number[]): string {
   if (values.length === 0) return "–"
   return points.map((point) => num(percentile(values, point))).join(" / ")
+}
+
+/** A summary cell: what the table shows, and the numbers behind it (median; percentiles in order; counts), empty when there is no data. */
+export type Cell = { text: string; numbers: number[] }
+
+function medianCell(values: number[], scale = 1): Cell {
+  const summary = summarize(values.map((value) => value / scale))
+  return { text: medianRange(summary), numbers: summary ? [summary.median] : [] }
+}
+
+function percentileCell(values: number[], points: number[]): Cell {
+  return { text: pooledPercentiles(values, points), numbers: values.length === 0 ? [] : points.map((point) => percentile(values, point)) }
+}
+
+function textCell(text: string, numbers: number[] = []): Cell {
+  return { text, numbers }
 }
 
 function present(values: (number | null | undefined)[]): number[] {
@@ -114,7 +130,7 @@ function collect(env: Env, records: RunRecord[], includeInvalid: boolean): AppDa
   })
 }
 
-type Row = { label: string; cells: string[] } | { heading: string }
+type Row = { key: string; label: string; cells: Cell[] } | { heading: string }
 
 function phaseOf(session: { analysis: SessionAnalysis }, name: PhaseName): PhaseAnalysis | undefined {
   return session.analysis.phases[name]
@@ -130,24 +146,25 @@ function phaseValues(
 }
 
 function usageRows(data: AppData[], name: PhaseName): Row[] {
-  const spec: { label: string; scale: number; pick: (phase: PhaseAnalysis) => number | null }[] = [
-    { label: "CPU (% of one core)", scale: 1, pick: (phase) => phase.usage.cpuPct },
-    { label: "CPU time (ms)", scale: 1, pick: (phase) => phase.usage.cpuMs },
-    { label: "Instructions (millions)", scale: 1e6, pick: (phase) => phase.usage.instructions },
-    { label: "Cycles (millions)", scale: 1e6, pick: (phase) => phase.usage.cycles },
-    { label: "Energy (mJ)", scale: 1, pick: (phase) => phase.usage.energyMj },
-    { label: "Wakeups (per s)", scale: 1, pick: (phase) => phase.usage.wakeupsPerSec },
+  const spec: { key: string; label: string; scale: number; pick: (phase: PhaseAnalysis) => number | null }[] = [
+    { key: "cpuPct", label: "CPU (% of one core)", scale: 1, pick: (phase) => phase.usage.cpuPct },
+    { key: "cpuMs", label: "CPU time (ms)", scale: 1, pick: (phase) => phase.usage.cpuMs },
+    { key: "instructionsM", label: "Instructions (millions)", scale: 1e6, pick: (phase) => phase.usage.instructions },
+    { key: "cyclesM", label: "Cycles (millions)", scale: 1e6, pick: (phase) => phase.usage.cycles },
+    { key: "energyMj", label: "Energy (mJ)", scale: 1, pick: (phase) => phase.usage.energyMj },
+    { key: "wakeupsPerSec", label: "Wakeups (per s)", scale: 1, pick: (phase) => phase.usage.wakeupsPerSec },
   ]
   return spec.map((entry) => ({
+    key: `${name}.${entry.key}`,
     label: entry.label,
-    cells: data.map((app) => medianRangeOf(phaseValues(app.sessions, name, entry.pick), entry.scale)),
+    cells: data.map((app) => medianCell(phaseValues(app.sessions, name, entry.pick), entry.scale)),
   }))
 }
 
 function frameCell(
   data: AppData, name: PhaseName, pick: (phase: PhaseAnalysis) => number | null | undefined, scale = 1,
-): string {
-  return medianRangeOf(phaseValues(data.frameSessions, name, pick), scale)
+): Cell {
+  return medianCell(phaseValues(data.frameSessions, name, pick), scale)
 }
 
 function pooledMotion(data: AppData, name: PhaseName): number[] {
@@ -176,16 +193,17 @@ function pooledKeys(
 
 function keyCells(data: AppData[], name: PhaseName, pick: (phase: PhaseAnalysis) => (number | null)[] | null | undefined) {
   return {
-    percentiles: data.map((app) => pooledPercentiles(pooledKeys(app, name, pick).values, [50, 95])),
-    noChange: data.map((app) => {
+    percentiles: data.map((app) => percentileCell(pooledKeys(app, name, pick).values, [50, 95])),
+    noChange: data.map((app): Cell => {
       const keys = pooledKeys(app, name, pick)
-      return keys.total === 0 ? "–" : `${keys.noChange} / ${keys.total}`
+      return keys.total === 0 ? textCell("–") : textCell(`${keys.noChange} / ${keys.total}`, [keys.noChange, keys.total])
     }),
   }
 }
 
-function deliveryRow(data: AppData[], name: PhaseName): { label: string; cells: string[] } {
+function deliveryRow(data: AppData[], name: PhaseName): Extract<Row, { label: string }> {
   return {
+    key: `${name}.deliveryFps`,
     label: "Capture delivery (frames/s, changed or not)",
     cells: data.map((app) => frameCell(app, name, (phase) => phase.delivery?.framesPerSec)),
   }
@@ -193,37 +211,39 @@ function deliveryRow(data: AppData[], name: PhaseName): { label: string; cells: 
 
 function summaryRows(env: Env, data: AppData[]): Row[] {
   const rows: Row[] = []
-  const cells = (make: (app: AppData) => string) => data.map(make)
+  const cells = (make: (app: AppData) => Cell) => data.map(make)
+  const launchValues = (app: AppData, pick: (launch: LaunchAnalysis) => number | null) => present(app.launches.map(pick))
   rows.push({ heading: "Samples" })
-  rows.push({ label: "Startup launches kept", cells: cells((app) => `${app.launches.length}${app.startupFromSessions ? " (from sessions)" : ""}`) })
-  rows.push({ label: "Sessions (window active and uncovered / total)", cells: cells((app) => `${app.frameSessions.length} / ${app.sessions.length}`) })
+  rows.push({ key: "samples.launches", label: "Startup launches kept", cells: cells((app) => textCell(`${app.launches.length}${app.startupFromSessions ? " (from sessions)" : ""}`, [app.launches.length])) })
+  rows.push({ key: "samples.sessions", label: "Sessions (window active and uncovered / total)", cells: cells((app) => textCell(`${app.frameSessions.length} / ${app.sessions.length}`, [app.frameSessions.length, app.sessions.length])) })
 
   rows.push({ heading: "Startup" })
-  rows.push({ label: "Window visible (ms)", cells: cells((app) => medianRangeOf(present(app.launches.map((launch) => launch.windowVisibleMs)))) })
-  rows.push({ label: "Content ready (ms)", cells: cells((app) => medianRangeOf(present(app.launches.map((launch) => launch.contentReadyMs)))) })
-  rows.push({ label: "Footprint at launch + 1 s (MiB)", cells: cells((app) => medianRangeOf(present(app.launches.map((launch) => launch.footprint)), MIB)) })
+  rows.push({ key: "startup.windowVisibleMs", label: "Window visible (ms)", cells: cells((app) => medianCell(launchValues(app, (launch) => launch.windowVisibleMs))) })
+  rows.push({ key: "startup.contentReadyMs", label: "Content ready (ms)", cells: cells((app) => medianCell(launchValues(app, (launch) => launch.contentReadyMs))) })
+  rows.push({ key: "startup.footprintMiB", label: "Footprint at launch + 1 s (MiB)", cells: cells((app) => medianCell(launchValues(app, (launch) => launch.footprint), MIB)) })
 
   rows.push({ heading: "Idle (10 s)" })
   rows.push(...usageRows(data, "idle"))
-  rows.push({ label: "App frames (a region changed)", cells: cells((app) => frameCell(app, "idle", (phase) => phase.idleFrames)) })
+  rows.push({ key: "idle.appFrames", label: "App frames (a region changed)", cells: cells((app) => frameCell(app, "idle", (phase) => phase.idleFrames)) })
   rows.push(deliveryRow(data, "idle"))
-  rows.push({ label: "Footprint after idle (MiB)", cells: cells((app) => medianRangeOf(phaseValues(app.sessions, "idle", (phase) => phase.footprint), MIB)) })
+  rows.push({ key: "idle.footprintMiB", label: "Footprint after idle (MiB)", cells: cells((app) => medianCell(phaseValues(app.sessions, "idle", (phase) => phase.footprint), MIB)) })
 
   for (const name of ["scroll", "hover"] as const) {
     rows.push({ heading: name === "scroll" ? "Scroll (3 s down, 3 s up, 120 events/s)" : "Hover (2 s down, 2 s up, 120 moves/s)" })
     rows.push(...usageRows(data, name))
-    rows.push({ label: "App frames between first and last input (list changed)", cells: cells((app) => frameCell(app, name, (phase) => phase.motion?.frames)) })
-    rows.push({ label: "App frame rate (fps, higher is better)", cells: cells((app) => frameCell(app, name, (phase) => phase.motion?.fps)) })
-    rows.push({ label: "App frame interval p50 / p95 / p99 (ms, pooled)", cells: cells((app) => pooledPercentiles(pooledMotion(app, name), [50, 95, 99])) })
-    rows.push({ label: `Long frames (> ${num(1500 / env.display.refreshHz)} ms)`, cells: cells((app) => frameCell(app, name, (phase) => phase.motion?.longFrames)) })
+    rows.push({ key: `${name}.appFrames`, label: "App frames between first and last input (list changed)", cells: cells((app) => frameCell(app, name, (phase) => phase.motion?.frames)) })
+    rows.push({ key: `${name}.fps`, label: "App frame rate (fps, higher is better)", cells: cells((app) => frameCell(app, name, (phase) => phase.motion?.fps)) })
+    rows.push({ key: `${name}.intervalMs`, label: "App frame interval p50 / p95 / p99 (ms, pooled)", cells: cells((app) => percentileCell(pooledMotion(app, name), [50, 95, 99])) })
+    rows.push({ key: `${name}.longFrames`, label: `Long frames (> ${num(1500 / env.display.refreshHz)} ms)`, cells: cells((app) => frameCell(app, name, (phase) => phase.motion?.longFrames)) })
     rows.push({
+      key: `${name}.firstInputLatencyMs`,
       label: name === "scroll" ? "First-input latency (ms)" : "First-row-change latency (ms)",
       cells: cells((app) => frameCell(app, name, (phase) => phase.motion?.firstInputLatencyMs)),
     })
     if (name === "hover") {
       const crossings = keyCells(data, "hover", (phase) => phase.motion?.rowLatenciesMs)
-      rows.push({ label: "Row-change latency p50 / p95 (ms, pooled per row crossing)", cells: crossings.percentiles })
-      rows.push({ label: "Row crossings with no visible change", cells: crossings.noChange })
+      rows.push({ key: "hover.rowLatencyMs", label: "Row-change latency p50 / p95 (ms, pooled per row crossing)", cells: crossings.percentiles })
+      rows.push({ key: "hover.rowNoChange", label: "Row crossings with no visible change", cells: crossings.noChange })
     }
     rows.push(deliveryRow(data, name))
   }
@@ -232,41 +252,67 @@ function summaryRows(env: Env, data: AppData[]): Row[] {
   rows.push(...usageRows(data, "type"))
   const echo = keyCells(data, "type", (phase) => phase.echoMs)
   const result = keyCells(data, "type", (phase) => phase.resultMs)
-  rows.push({ label: "Echo latency p50 / p95 (ms, pooled per key)", cells: echo.percentiles })
-  rows.push({ label: "Echo: keys with no visible change", cells: echo.noChange })
-  rows.push({ label: "Result latency p50 / p95 (ms, pooled per key)", cells: result.percentiles })
-  rows.push({ label: "Result: keys with no visible change", cells: result.noChange })
+  rows.push({ key: "type.echoMs", label: "Echo latency p50 / p95 (ms, pooled per key)", cells: echo.percentiles })
+  rows.push({ key: "type.echoNoChange", label: "Echo: keys with no visible change", cells: echo.noChange })
+  rows.push({ key: "type.resultMs", label: "Result latency p50 / p95 (ms, pooled per key)", cells: result.percentiles })
+  rows.push({ key: "type.resultNoChange", label: "Result: keys with no visible change", cells: result.noChange })
   rows.push(deliveryRow(data, "type"))
 
   rows.push({ heading: "Navigate (30 x ArrowDown, 120 ms per key)" })
   rows.push(...usageRows(data, "navigate"))
   const detail = keyCells(data, "navigate", (phase) => phase.detailMs)
-  rows.push({ label: "Detail latency p50 / p95 (ms, pooled per key)", cells: detail.percentiles })
-  rows.push({ label: "Detail: keys with no visible change", cells: detail.noChange })
+  rows.push({ key: "navigate.detailMs", label: "Detail latency p50 / p95 (ms, pooled per key)", cells: detail.percentiles })
+  rows.push({ key: "navigate.detailNoChange", label: "Detail: keys with no visible change", cells: detail.noChange })
   rows.push(deliveryRow(data, "navigate"))
 
   rows.push({ heading: "After workload" })
-  rows.push({ label: "Footprint after workload (MiB)", cells: cells((app) => medianRangeOf(present(app.sessions.map((session) => session.analysis.workloadFootprint)), MIB)) })
+  rows.push({ key: "workload.footprintMiB", label: "Footprint after workload (MiB)", cells: cells((app) => medianCell(present(app.sessions.map((session) => session.analysis.workloadFootprint)), MIB)) })
 
   rows.push({ heading: "Size" })
-  rows.push({ label: "App bundle (MiB, du -sk)", cells: cells((app) => (env.apps[app.app] ? num(env.apps[app.app]!.bundleKb / 1024) : "–")) })
-  rows.push({ label: "Main executable (MiB)", cells: cells((app) => (env.apps[app.app] ? num(env.apps[app.app]!.executableBytes / MIB) : "–")) })
+  const sizeCell = (app: AppData, pick: (info: NonNullable<Env["apps"][AppId]>) => number): Cell => {
+    const info = env.apps[app.app]
+    return info ? textCell(num(pick(info)), [pick(info)]) : textCell("–")
+  }
+  rows.push({ key: "size.bundleMiB", label: "App bundle (MiB, du -sk)", cells: cells((app) => sizeCell(app, (info) => info.bundleKb / 1024)) })
+  rows.push({ key: "size.executableMiB", label: "Main executable (MiB)", cells: cells((app) => sizeCell(app, (info) => info.executableBytes / MIB)) })
   return rows
+}
+
+export type SummaryMetric = { key: string; section: string; label: string; cells: Partial<Record<AppId, Cell>> }
+
+/** The rows of report.md's summary table with the numbers behind each cell, for machine-readable records. */
+export function summaryMetrics(env: Env, records: RunRecord[], includeInvalid = false): SummaryMetric[] {
+  const data = collect(env, records, includeInvalid)
+  const metrics: SummaryMetric[] = []
+  let section = ""
+  for (const row of summaryRows(env, data)) {
+    if ("heading" in row) {
+      section = row.heading
+      continue
+    }
+    metrics.push({
+      key: row.key,
+      section,
+      label: row.label,
+      cells: Object.fromEntries(data.map((app, index) => [app.app, row.cells[index]])),
+    })
+  }
+  return metrics
 }
 
 function renderSummary(env: Env, data: AppData[]): string {
   const header = ["Metric", ...data.map((app) => APP_LABELS[app.app])]
   const lines = [`| ${header.join(" | ")} |`, `| --- | ${data.map(() => "---:").join(" | ")} |`]
-  const sections: { heading: string; rows: { label: string; cells: string[] }[] }[] = []
+  const sections: { heading: string; rows: { label: string; cells: Cell[] }[] }[] = []
   for (const row of summaryRows(env, data)) {
     if ("heading" in row) sections.push({ heading: row.heading, rows: [] })
     else sections[sections.length - 1].rows.push(row)
   }
   for (const section of sections) {
-    const empty = section.rows.length > 0 && section.rows.every((row) => row.cells.every((cell) => cell === "–"))
+    const empty = section.rows.length > 0 && section.rows.every((row) => row.cells.every((cell) => cell.text === "–"))
     lines.push(`| **${section.heading}**${empty ? " (not measured, see Validity)" : ""} | ${data.map(() => "").join(" | ")} |`)
     if (empty) continue
-    for (const row of section.rows) lines.push(`| ${escapeCell(row.label)} | ${row.cells.map(escapeCell).join(" | ")} |`)
+    for (const row of section.rows) lines.push(`| ${escapeCell(row.label)} | ${row.cells.map((cell) => escapeCell(cell.text)).join(" | ")} |`)
   }
   return lines.join("\n")
 }
@@ -315,7 +361,9 @@ function renderEnvironment(env: Env): string {
     `Scroll bars (System Settings): ${env.scrollBars ?? "unknown"}${env.scrollBars === "unset" ? " (Automatic)" : ""}.`,
     `Main display ${env.display.widthPt} x ${env.display.heightPt} pt, scale ${env.display.scale}, ${env.display.refreshHz} Hz.`,
     `Load average (1/5/15 min) at start: ${env.loadAverage.map((value) => value.toFixed(2)).join(" / ")}.`,
-    ...(env.args.apps.includes("ghia") ? [`Ghia ${env.ghia.sha ?? "unknown"}, zed ${env.ghia.zedSha ?? "unknown"}.`] : []),
+    ...(env.args.apps.includes("ghia")
+      ? [env.ghiaSource ? `Ghia from ${env.ghiaSource}.` : `Ghia ${env.ghia.sha ?? "unknown"}, zed ${env.ghia.zedSha ?? "unknown"}.`]
+      : []),
     ...(env.args.apps.includes("electron") ? [`Electron ${env.electron ? `${env.electron.electron}, Chromium ${env.electron.chromium}` : "unknown"}.`] : []),
     `Bun ${env.bun}, ${env.rustc ?? "rustc unknown"}.`,
     ...(env.mygo ? [`MyGo ${env.mygo.module ?? "module unknown"}, go ${env.mygo.goVersion ?? "unknown"}.`] : []),

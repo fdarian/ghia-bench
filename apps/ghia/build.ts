@@ -9,10 +9,12 @@ import { nativeCjsPlugin } from './native-cjs-plugin'
 
 process.env.NODE_ENV = 'production'
 
+// The executable keeps one name whatever the bundle is called, so every build is the same program.
 const NAME = 'Mailbox-Ghia'
 const root = import.meta.dir
-const repo = join(root, '../..')
-const app = join(repo, 'dist', `${NAME}.app`)
+// build.sh runs this from an isolated copy when the Ghia packages come from npm.
+const repo = process.env.BENCH_ROOT ?? join(root, '../..')
+const app = process.env.GHIA_APP_OUT ?? join(repo, 'dist', `${NAME}.app`)
 const binary = join(app, 'Contents/MacOS', NAME)
 
 rmSync(app, { recursive: true, force: true })

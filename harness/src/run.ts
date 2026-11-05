@@ -1,6 +1,6 @@
 import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
-import { bundlePath, collectEnv, currentLoadAverage } from "./env"
+import { bundlePath, collectEnv, currentLoadAverage, overrideBundles } from "./env"
 import { probe, runHelper, sample } from "./helper"
 import { requireOrRequestPermissions } from "./permissions"
 import { quitTree, runningMailboxProcesses, sleep, TreeTracker } from "./procs"
@@ -20,6 +20,9 @@ export type RunOptions = {
   capture: CaptureMode
   allowMissingPermissions: boolean
   out: string
+  /** Bundles to launch instead of dist/'s, and what the Ghia one was built from (history records). */
+  bundles?: Partial<Record<AppId, string>>
+  ghiaSource?: string
 }
 
 const LAUNCH_TIMEOUT_MS = 40_000
@@ -207,6 +210,7 @@ export async function runBench(options: RunOptions): Promise<void> {
       `refusing to start: Mailbox-* processes are running (pids ${running.map((entry) => entry.pid).join(", ")}). Quit them first; the harness will not touch them.`,
     )
   }
+  if (options.bundles) overrideBundles(options.bundles)
   const probeResult = await probe()
   if (!options.allowMissingPermissions) await requireOrRequestPermissions(probeResult, options.capture !== "off")
   const capture = resolveCapture(options.capture, probeResult)
@@ -217,7 +221,8 @@ export async function runBench(options: RunOptions): Promise<void> {
   mkdirSync(options.out, { recursive: true })
   const env = await collectEnv({
     startedAt: new Date().toISOString(),
-    args: { apps: options.apps, rounds: options.rounds, launches: options.launches, capture: options.capture, out: options.out },
+    args: { apps: options.apps, rounds: options.rounds, launches: options.launches, capture: options.capture, out: options.out, bundles: options.bundles },
+    ghiaSource: options.ghiaSource,
     probe: probeResult,
     capture,
     input,
