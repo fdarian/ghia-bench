@@ -5,9 +5,11 @@ use gpui::{
     ClipboardItem, Context, CursorStyle, ElementId, ElementInputHandler, Entity,
     EntityInputHandler, EventEmitter, FocusHandle, Focusable, GlobalElementId, KeyBinding,
     LayoutId, MouseButton, MouseDownEvent, MouseMoveEvent, MouseUpEvent, PaintQuad, Pixels, Point,
-    ShapedLine, SharedString, Style, TextRun, UTF16Selection, UnderlineStyle, Window,
+    ShapedLine, SharedString, Style, Subscription, TextRun, UTF16Selection, UnderlineStyle, Window,
 };
 use unicode_segmentation::*;
+
+use crate::blink::BlinkManager;
 
 actions!(
     text_input,
@@ -61,6 +63,8 @@ pub struct TextInput {
     last_layout: Option<ShapedLine>,
     last_bounds: Option<Bounds<Pixels>>,
     is_selecting: bool,
+    blink: Entity<BlinkManager>,
+    _subscriptions: [Subscription; 3],
 }
 
 impl TextInput {
@@ -183,6 +187,7 @@ impl TextInput {
 
     fn move_to(&mut self, offset: usize, cx: &mut Context<Self>) {
         self.selected_range = offset..offset;
+        self.pause_blinking(cx);
         cx.notify()
     }
 
@@ -222,6 +227,7 @@ impl TextInput {
             self.selection_reversed = !self.selection_reversed;
             self.selected_range = self.selected_range.end..self.selected_range.start;
         }
+        self.pause_blinking(cx);
         cx.notify()
     }
 
@@ -278,9 +284,26 @@ impl TextInput {
             .unwrap_or(self.content.len())
     }
 
-    pub fn new(placeholder: &'static str, cx: &mut Context<Self>) -> Self {
+    fn pause_blinking(&self, cx: &mut Context<Self>) {
+        self.blink.update(cx, BlinkManager::pause_blinking);
+    }
+
+    pub fn new(placeholder: &'static str, window: &mut Window, cx: &mut Context<Self>) -> Self {
+        let focus_handle = cx.focus_handle();
+        let blink = cx.new(|_| BlinkManager::new());
+        let subscriptions = [
+            cx.observe(&blink, |_, _, cx| cx.notify()),
+            cx.on_focus(&focus_handle, window, |this, _, cx| {
+                this.blink.update(cx, BlinkManager::enable);
+            }),
+            cx.on_blur(&focus_handle, window, |this, _, cx| {
+                this.blink.update(cx, BlinkManager::disable);
+            }),
+        ];
         TextInput {
-            focus_handle: cx.focus_handle(),
+            focus_handle,
+            blink,
+            _subscriptions: subscriptions,
             content: "".into(),
             placeholder: placeholder.into(),
             selected_range: 0..0,
@@ -301,6 +324,7 @@ impl TextInput {
         self.selected_range = 0..0;
         self.selection_reversed = false;
         self.marked_range = None;
+        self.pause_blinking(cx);
         cx.emit(InputChanged);
         cx.notify();
     }
@@ -363,6 +387,7 @@ impl EntityInputHandler for TextInput {
                 .into();
         self.selected_range = range.start + new_text.len()..range.start + new_text.len();
         self.marked_range.take();
+        self.pause_blinking(cx);
         cx.emit(InputChanged);
         cx.notify();
     }
@@ -395,6 +420,7 @@ impl EntityInputHandler for TextInput {
             .map(|new_range| new_range.start + range.start..new_range.end + range.end)
             .unwrap_or_else(|| range.start + new_text.len()..range.start + new_text.len());
 
+        self.pause_blinking(cx);
         cx.emit(InputChanged);
         cx.notify();
     }
@@ -491,6 +517,7 @@ impl Element for TextElement {
         let content = input.content.clone();
         let selected_range = input.selected_range.clone();
         let cursor = input.cursor_offset();
+        let caret_visible = input.blink.read(cx).visible();
         let style = window.text_style();
 
         let (display_text, text_color) = if content.is_empty() {
@@ -545,7 +572,7 @@ impl Element for TextElement {
         let (selection, cursor) = if selected_range.is_empty() {
             (
                 None,
-                Some(fill(
+                caret_visible.then(|| fill(
                     Bounds::new(
                         point(bounds.left() + cursor_pos, bounds.top()),
                         size(px(1.), bounds.bottom() - bounds.top()),
@@ -674,6 +701,7 @@ impl TextInput {
     pub fn set_text(&mut self, text: &str, cx: &mut Context<Self>) {
         self.content = text.to_owned().into();
         self.selected_range = text.len()..text.len();
+        self.pause_blinking(cx);
         cx.emit(InputChanged);
         cx.notify();
     }

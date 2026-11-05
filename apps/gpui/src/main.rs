@@ -1,3 +1,4 @@
+mod blink;
 mod data;
 mod input;
 #[cfg(feature = "snapshot")]
@@ -51,8 +52,8 @@ struct Mailbox {
 }
 
 impl Mailbox {
-    fn new(messages: Vec<Message>, cx: &mut Context<Self>) -> Self {
-        let search = cx.new(|cx| TextInput::new("Search mail", cx));
+    fn new(messages: Vec<Message>, window: &mut Window, cx: &mut Context<Self>) -> Self {
+        let search = cx.new(|cx| TextInput::new("Search mail", window, cx));
         let subscription = cx.subscribe(&search, |this, search, _: &InputChanged, cx| {
             let query = search.read(cx).content().to_owned();
             this.apply_filter(&query, cx);
@@ -507,7 +508,7 @@ fn main() {
                     ..Default::default()
                 },
                 |window, cx| {
-                    let mailbox = cx.new(|cx| Mailbox::new(messages, cx));
+                    let mailbox = cx.new(|cx| Mailbox::new(messages, window, cx));
                     window.focus(&mailbox.focus_handle(cx), cx);
                     mailbox
                 },

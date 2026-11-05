@@ -59,6 +59,7 @@ Bg #F4F4F5, 1px right border #E4E4E7.
 Bg #FFFFFF, 1px right border #E4E4E7.
 
 - Search area y 0-56: input at (12, 12) size 396x32, radius 8, bg #F4F4F5, 1px border #E4E4E7, padding-x 10, text 13px #18181B, placeholder "Search mail" #A1A1AA. Focused border #2563EB.
+  - Caret: 1px wide, #18181B, the full line height. Only while the input is focused. Solid during edits and caret moves; after 500 ms without either it blinks 500 ms off / 500 ms on, indefinitely.
 - Count line y 56-84: "{n} conversations" (n formatted with thousands separator), 12px #71717A, padding-left 16.
 - List y 84-800 (716 tall), vertical scroll, virtualized, rows exactly 72 tall:
   - Bottom 1px separator #F4F4F5 inside the 72.
@@ -97,4 +98,4 @@ Bg #FFFFFF, vertical scroll, padding 32 all sides.
 - Ghia: `letter-spacing: 0.5` on "LABELS" is not applied: `letterSpacing` is not in Ghia's `StyleDesc` for HTML text (only SVG text has it), so the heading is drawn without tracking (a few px narrower).
 - Ghia: `<virtual-list>` runs in `itemCount` mode (documented windowing): 60 rows are mounted around `onVisibleRange.startIndex` (native builds viewport + 512 px overdraw, about 24 rows). `scrollToItem` top-aligns a row, so selection-into-view uses `scrollTo` against the fixed 72 px rows to get the SPEC's minimal scroll.
 - GPUI: `letter-spacing: 0.5` on "LABELS" is not applied: gpui's `TextStyle` has no letter spacing, so the heading is drawn without tracking.
-- GPUI: SPEC gives no line heights for the sender column or caret, so the app uses 18 (13px lines), 16 (12px lines), 20/20 (sender name 14px / email 13px, column centred in the 40px row), 16 (`dateLong`, top-aligned), and a 1px #18181B caret. Other apps should match these where they differ from their defaults.
+- GPUI: SPEC gives no line heights for the sender column, so the app uses 18 (13px lines), 16 (12px lines), 20/20 (sender name 14px / email 13px, column centred in the 40px row), and 16 (`dateLong`, top-aligned). Other apps should match these where they differ from their defaults.
