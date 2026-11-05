@@ -103,6 +103,17 @@ Analysis lives in `harness/src/analysis.ts` (pure functions, unit-tested with sy
 - **Results are machine-specific.** `env.json` records the chip, RAM, display, refresh rate, load average, and the Ghia, zed, Electron/Chromium, Bun and rustc versions. Compare runs only within one machine and one display setup.
 - **The apps are not pixel-identical.** The known differences (Electron's async data fetch before first paint, missing `letter-spacing` in Ghia and GPUI, Ghia's windowed `<virtual-list>`, GPUI's chosen line heights, SwiftUI's line-height emulation, MyGo's caret blink period) are listed under "Parity notes" in [SPEC.md](./SPEC.md).
 
+## Ghia history
+
+The Mailbox app is also measured against past Ghia versions, so improvements show up over time: [history/ghia/README.md](./history/ghia/README.md) has the table (instructions and memory are the headline, with Electron recorded back to back as the machine-drift reference), the charts and the entries. The app source is identical for every version; a version is a published `@ghia/solid` + `@ghia/native` pair, or a snapshot of fdarian/ghia built from source.
+
+```
+bun harness/src/bench.ts history record <npm version | git sha> [--rounds 5] [--launches 10] [--capture auto|on|off]
+bun harness/src/bench.ts history report
+```
+
+`record` builds that Ghia (`apps/ghia/build.sh npm:<version>`, or `vendor <label>` for a git sha, into `dist/history/`), runs the benchmark for it and the pinned Electron app, and writes `history/ghia/<label>.json` and `<label>.report.md`; `report` regenerates the README and charts from the JSON. Record the versions you want to compare in one session.
+
 ## Layout
 
 ```
@@ -116,6 +127,7 @@ apps/swiftui/        Swift package, native SwiftUI
 apps/mygo/           Go module on MyGo's native ui package
 harness/helper/      Swift CLI: launch timing, process metrics, input, frame capture
 harness/src/         Bun orchestrator: rounds, stats, report
-dist/                packaged apps (gitignored)
+dist/                packaged apps, and dist/history/ for the Ghia versions (gitignored)
+history/ghia/        recorded Ghia versions: JSON, run reports, README with the table and charts
 results/             per-run output (gitignored)
 ```
