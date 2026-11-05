@@ -5,14 +5,17 @@
 <line x1="56" y1="34" x2="56" y2="154" stroke="#888" stroke-opacity="0.5"/>
 <text x="50" y="158" text-anchor="end" fill="#888">0</text>
 <text x="50" y="38" text-anchor="end" fill="#888">9659</text>
-<polyline points="92.0,66.6 240.0,66.0 388.0,65.1" fill="none" stroke="#2563eb" stroke-width="2"/>
+<polyline points="92.0,66.6 190.7,66.0 289.3,65.1 388.0,65.9" fill="none" stroke="#2563eb" stroke-width="2"/>
 <text x="92.0" y="178" text-anchor="middle" fill="#888">0.11.0</text>
 <circle cx="92.0" cy="66.6" r="3.5" fill="#2563eb"/>
 <text x="92.0" y="58.6" text-anchor="middle" fill="#888">7033</text>
-<text x="240.0" y="178" text-anchor="middle" fill="#888">0.11.1</text>
-<circle cx="240.0" cy="66.0" r="3.5" fill="#2563eb"/>
-<text x="240.0" y="58.0" text-anchor="middle" fill="#888">7082</text>
-<text x="388.0" y="178" text-anchor="middle" fill="#888">main-8fcd806</text>
-<circle cx="388.0" cy="65.1" r="3.5" fill="#2563eb"/>
-<text x="388.0" y="57.1" text-anchor="middle" fill="#888">7155</text>
+<text x="190.7" y="178" text-anchor="middle" fill="#888">0.11.1</text>
+<circle cx="190.7" cy="66.0" r="3.5" fill="#2563eb"/>
+<text x="190.7" y="58.0" text-anchor="middle" fill="#888">7082</text>
+<text x="289.3" y="178" text-anchor="middle" fill="#888">main-8fcd806</text>
+<circle cx="289.3" cy="65.1" r="3.5" fill="#2563eb"/>
+<text x="289.3" y="57.1" text-anchor="middle" fill="#888">7155</text>
+<text x="388.0" y="178" text-anchor="middle" fill="#888">main-8fe6300</text>
+<circle cx="388.0" cy="65.9" r="3.5" fill="#2563eb"/>
+<text x="388.0" y="57.9" text-anchor="middle" fill="#888">7090</text>
 </svg>
