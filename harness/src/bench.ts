@@ -4,6 +4,7 @@ import { check } from "./check"
 import { existingApps } from "./env"
 import { REPO_ROOT } from "./helper"
 import { recordHistory, writeHistoryReport } from "./history"
+import { DEFAULT_PUBLISHED, DEFAULT_README, publish } from "./publish"
 import { readEnv, writeReport } from "./report"
 import { runBench, type CaptureMode } from "./run"
 import { APP_IDS, type AppId } from "./types"
@@ -12,6 +13,7 @@ const USAGE = `usage:
   bun harness/src/bench.ts check
   bun harness/src/bench.ts run [--apps electron,ghia,gpui,swiftui,mygo] [--rounds 5] [--launches 10] [--capture auto|on|off] [--allow-missing-permissions] [--out results/<ISO>]
   bun harness/src/bench.ts report <results dir> [--include-invalid]
+  bun harness/src/bench.ts publish <results dir> [--readme README.md]
   bun harness/src/bench.ts history record <npm version | git sha> [--rounds 5] [--launches 10] [--capture auto|on|off]
   bun harness/src/bench.ts history report`
 
@@ -72,6 +74,15 @@ async function main(): Promise<void> {
       readEnv(dir)
       writeReport(dir, { includeInvalid: parsed.values["include-invalid"] ?? false })
       console.log(`wrote ${dir}/report.md`)
+      return
+    }
+    case "publish": {
+      const parsed = parseArgs({ args: rest, options: { readme: { type: "string" } }, allowPositionals: true })
+      if (parsed.positionals.length !== 1) throw new Error(USAGE)
+      const resultsDir = resolve(parsed.positionals[0])
+      const readmePath = parsed.values.readme ? resolve(parsed.values.readme) : DEFAULT_README
+      const name = publish({ resultsDir, readmePath, publishedRoot: DEFAULT_PUBLISHED })
+      console.log(`copied report.md and env.json to published/${name}/; updated the results section of ${readmePath}`)
       return
     }
     case "history": {
