@@ -1,6 +1,7 @@
 import { cpus } from "node:os"
 import { currentLoadAverage, bundlePath, existingApps } from "./env"
 import { probe } from "./helper"
+import { requireOrRequestPermissions } from "./permissions"
 import { runningMailboxProcesses } from "./procs"
 import { resolveCapture, resolveInput } from "./run"
 import { APP_IDS, APP_LABELS } from "./types"
@@ -51,4 +52,5 @@ export async function check(): Promise<void> {
   for (const app of APP_IDS) {
     console.log(`  ${APP_LABELS[app].padEnd(9)} ${existing.includes(app) ? "present" : "missing"}  ${bundlePath(app)}`)
   }
+  await requireOrRequestPermissions(result, true)
 }

@@ -1,11 +1,13 @@
 import Foundation
 
 func dispatch(_ argv: [String]) throws -> [String: Any] {
-    guard argv.count >= 2 else { throw HelperError("usage: benchhelper probe|launch|sample|window|phase [options]") }
+    guard argv.count >= 2 else { throw HelperError("usage: benchhelper probe|request|launch|sample|window|phase [options]") }
     let rest = argv[2...]
     switch argv[1] {
     case "probe":
         return try probe()
+    case "request":
+        return requestPermissions()
     case "launch":
         return try launch(args: try Args(rest, flagNames: ["--capture"]))
     case "sample":

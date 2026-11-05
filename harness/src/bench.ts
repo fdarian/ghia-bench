@@ -9,7 +9,7 @@ import { APP_IDS, type AppId } from "./types"
 
 const USAGE = `usage:
   bun harness/src/bench.ts check
-  bun harness/src/bench.ts run [--apps electron,ghia,gpui] [--rounds 5] [--launches 10] [--capture auto|on|off] [--out results/<ISO>]
+  bun harness/src/bench.ts run [--apps electron,ghia,gpui] [--rounds 5] [--launches 10] [--capture auto|on|off] [--allow-missing-permissions] [--out results/<ISO>]
   bun harness/src/bench.ts report <results dir> [--include-invalid]`
 
 function positiveInt(name: string, text: string, min: number): number {
@@ -44,7 +44,7 @@ async function main(): Promise<void> {
         args: rest,
         options: {
           apps: { type: "string" }, rounds: { type: "string", default: "5" }, launches: { type: "string", default: "10" },
-          capture: { type: "string", default: "auto" }, out: { type: "string" },
+          capture: { type: "string", default: "auto" }, "allow-missing-permissions": { type: "boolean", default: false }, out: { type: "string" },
         },
       })
       const capture = parsed.values.capture
@@ -57,6 +57,7 @@ async function main(): Promise<void> {
         rounds: positiveInt("rounds", parsed.values.rounds!, 1),
         launches: positiveInt("launches", parsed.values.launches!, 0),
         capture: capture as CaptureMode,
+        allowMissingPermissions: parsed.values["allow-missing-permissions"] ?? false,
         out,
       })
       return

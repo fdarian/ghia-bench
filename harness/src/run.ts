@@ -2,6 +2,7 @@ import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } fr
 import { join } from "node:path"
 import { bundlePath, collectEnv, currentLoadAverage } from "./env"
 import { probe, runHelper, sample } from "./helper"
+import { requireOrRequestPermissions } from "./permissions"
 import { quitTree, runningMailboxProcesses, sleep, TreeTracker } from "./procs"
 import { writeReport } from "./report"
 import type {
@@ -17,6 +18,7 @@ export type RunOptions = {
   rounds: number
   launches: number
   capture: CaptureMode
+  allowMissingPermissions: boolean
   out: string
 }
 
@@ -206,6 +208,7 @@ export async function runBench(options: RunOptions): Promise<void> {
     )
   }
   const probeResult = await probe()
+  if (!options.allowMissingPermissions) await requireOrRequestPermissions(probeResult, options.capture !== "off")
   const capture = resolveCapture(options.capture, probeResult)
   const input = resolveInput(probeResult)
   if (existsSync(join(options.out, "runs.jsonl")) && readFileSync(join(options.out, "runs.jsonl"), "utf8").length > 0) {

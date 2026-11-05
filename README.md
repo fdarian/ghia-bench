@@ -59,7 +59,7 @@ Permissions, for the terminal app you run the harness from (System Settings > Pr
 - **Screen Recording**: frame capture (content-ready time, idle frames, frame rate and latency).
 - **Accessibility**: the `CGEventPostToPid` scroll, hover and keyboard input.
 
-Without them `run` still works and says what it skipped: startup (window visible), idle CPU and memory are measured, the input phases are recorded as skipped, and frame metrics are absent.
+`check` and `run` stop with a non-zero exit when one is missing: they trigger the macOS permission dialogs (first time only) and name what is missing. Grant it to the terminal app, quit that terminal completely and reopen it (a grant only applies to newly started processes), then rerun. `--capture off` does not need Screen Recording. `run --allow-missing-permissions` runs anyway and says what it skipped: startup (window visible), idle CPU and memory are measured, the input phases are recorded as skipped, and frame metrics are absent.
 
 Run from a **foreground terminal window** on the main display, started by you: a launch from a background or agent process does not make the app the active application, and a session whose window is not active or is covered by another window has its frame and latency metrics marked invalid. Keep the machine quiet while it runs: no clicks, no windows opening in front of the Mailbox window at screen (100, 100), plugged in, display awake, no other `Mailbox-*` app running (`run` refuses to start if one is).
 
@@ -67,7 +67,7 @@ Run from a **foreground terminal window** on the main display, started by you: a
 
 ```
 bun harness/src/bench.ts check
-bun harness/src/bench.ts run [--apps electron,ghia,gpui] [--rounds 5] [--launches 10] [--capture auto|on|off] [--out results/<ISO>]
+bun harness/src/bench.ts run [--apps electron,ghia,gpui] [--rounds 5] [--launches 10] [--capture auto|on|off] [--allow-missing-permissions] [--out results/<ISO>]
 bun harness/src/bench.ts report <results dir> [--include-invalid]
 bun test harness/src
 ```
