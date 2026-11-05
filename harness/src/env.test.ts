@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import { mygoModule } from "./env"
+import { gpuiSource, mygoModule } from "./env"
 import { rotate } from "./run"
 
 describe("mygoModule", () => {
@@ -12,6 +12,18 @@ describe("mygoModule", () => {
   })
   test("missing pieces are null, not invented", () => {
     expect(mygoModule("module m\n")).toEqual({ goVersion: null, module: null })
+  })
+})
+
+describe("gpuiSource", () => {
+  const sha = "654efae441bc8eb117d0042bb28cd7cf3570bdc9"
+  test("reads the git url and resolved commit of the gpui package", () => {
+    const lock = `[[package]]\nname = "gpui_macros"\nversion = "0.1.0"\nsource = "git+https://github.com/zed-industries/zed?branch=main#${"0".repeat(40)}"\n\n[[package]]\nname = "gpui"\nversion = "0.2.2"\nsource = "git+https://github.com/zed-industries/zed?branch=main#${sha}"\n`
+    expect(gpuiSource(lock)).toEqual({ git: "https://github.com/zed-industries/zed", commit: sha })
+  })
+  test("a registry or path gpui is an error, not a guess", () => {
+    expect(() => gpuiSource('[[package]]\nname = "gpui"\nversion = "0.2.2"\nsource = "registry+https://github.com/rust-lang/crates.io-index"\n')).toThrow()
+    expect(() => gpuiSource('[[package]]\nname = "gpui"\nversion = "0.2.2"\n')).toThrow()
   })
 })
 

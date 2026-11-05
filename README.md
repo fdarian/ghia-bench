@@ -10,12 +10,12 @@ One app, "Mailbox" (a 10,000-message mail client with a virtualized list, a live
   | --- | --- | --- | --- |
   | Electron | Solid + Vite + CSS, default Electron settings | `@tanstack/solid-virtual` | DOM `<input>` |
   | Ghia | `@ghia/solid`, style objects | `<virtual-list>` | `<input>` |
-  | GPUI | Rust, default gpui features | `uniform_list` | a `TextInput` entity with `EntityInputHandler` |
+  | GPUI | Rust, upstream gpui (git, `zed-industries/zed` `main`), default features | `uniform_list` | a `TextInput` entity with `EntityInputHandler` |
   | SwiftUI | Swift 6, SwiftUI views, `@Observable` | `List` (NSTableView-backed, recycled rows) | `TextField` with `.onKeyPress` for ArrowUp/ArrowDown |
   | MyGo | Go, MyGo's native `ui` package (pinned `977ea57`) | `ui.List` | `ui.TextInputBase` |
 
 - **Shipped builds.** All five run as release/production packaged `.app` bundles (Electron packaged with `--asar`, MyGo bundled by `go tool mygo build`), launched the way a user launches an app: `NSWorkspace.openApplication`, not by spawning the binary.
-- **Same gpui.** Ghia and the GPUI app are built on the identical pinned gpui: the GPUI crate path-depends on `vendor/ghia/zed/crates/gpui`, and `scripts/setup-ghia.sh` pins both the Ghia and the zed revision.
+- **Upstream gpui, not Ghia's.** The GPUI app depends on upstream gpui the way a GPUI author does: a git dependency on `https://github.com/zed-industries/zed`, branch `main`, at the commit `apps/gpui/Cargo.lock` pins (recorded in `env.json` and the report's environment block; refresh with `cargo update -p gpui` in `apps/gpui`, together with the channel in `apps/gpui/rust-toolchain.toml`, which follows upstream's). It uses no `[patch]`, and `gpui_platform` with the `font-kit` feature opens the window. Ghia is built on its own fork of gpui (`fdarian/zed`, pinned by `scripts/setup-ghia.sh`), so GPUI vs Ghia differs by both the fork's patches and Ghia's layer on top; it is not a pure framework-overhead comparison.
 - **Measured externally and identically.** One harness, the same phases, the same input events and the same analysis for every app.
 - **Rotated run order.** App order rotates every launch and round so drift in machine state does not favour one app.
 

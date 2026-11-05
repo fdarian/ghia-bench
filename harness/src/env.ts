@@ -91,6 +91,15 @@ export function mygoModule(goMod: string): { goVersion: string | null; module: s
   return { goVersion: goVersion ? goVersion[1] : null, module: module ? `${module[1]} ${module[2]}` : null }
 }
 
+/** The git source and resolved commit of the `gpui` package in apps/gpui/Cargo.lock. */
+export function gpuiSource(cargoLock: string): { git: string; commit: string } {
+  const entry = cargoLock.split("[[package]]").find((block) => /^\s*name = "gpui"$/m.test(block))
+  if (!entry) throw new Error("no gpui package in Cargo.lock")
+  const source = /^source = "git\+([^?#"]+)(?:\?[^#"]*)?#([0-9a-f]{40})"$/m.exec(entry)
+  if (!source) throw new Error("gpui in Cargo.lock is not a git dependency with a resolved commit")
+  return { git: source[1], commit: source[2] }
+}
+
 export type EnvInputs = {
   startedAt: string
   args: Env["args"]
@@ -129,6 +138,10 @@ export async function collectEnv(inputs: EnvInputs): Promise<Env> {
   const electron = inputs.args.apps.includes("electron") ? await attempt("Electron version", electronVersions) : null
   const rustc = await attempt("rustc --version", () => exec(["rustc", "--version"], { cwd: join(REPO_ROOT, "apps", "gpui") }))
 
+  const gpui = inputs.args.apps.includes("gpui")
+    ? await attempt("apps/gpui/Cargo.lock", async () => gpuiSource(readFileSync(join(REPO_ROOT, "apps", "gpui", "Cargo.lock"), "utf8")))
+    : null
+
   const mygo = inputs.args.apps.includes("mygo")
     ? await attempt("apps/mygo/go.mod", async () => mygoModule(readFileSync(join(REPO_ROOT, "apps", "mygo", "go.mod"), "utf8")))
     : null
@@ -163,6 +176,7 @@ export async function collectEnv(inputs: EnvInputs): Promise<Env> {
     electron,
     bun: Bun.version,
     rustc,
+    gpui,
     mygo,
     swift,
     apps,

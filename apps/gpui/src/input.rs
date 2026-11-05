@@ -541,8 +541,6 @@ impl Element for TextElement {
             vec![
                 TextRun {
                     len: marked_range.start,
-                    font_size: None,
-                    line_height: None,
                     ..run.clone()
                 },
                 TextRun {
@@ -552,14 +550,10 @@ impl Element for TextElement {
                         thickness: px(1.0),
                         ..Default::default()
                     }),
-                    font_size: None,
-                    line_height: None,
                     ..run.clone()
                 },
                 TextRun {
                     len: display_text.len() - marked_range.end,
-                    font_size: None,
-                    line_height: None,
                     ..run
                 },
             ]

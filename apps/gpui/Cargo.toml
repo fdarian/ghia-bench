@@ -9,8 +9,8 @@ name = "Mailbox-GPUI"
 path = "src/main.rs"
 
 [dependencies]
-gpui = { path = "../../vendor/ghia/zed/crates/gpui" }
-gpui_platform = { path = "../../vendor/ghia/zed/crates/gpui_platform", features = ["font-kit"] }
+gpui = { git = "https://github.com/zed-industries/zed", branch = "main" }
+gpui_platform = { git = "https://github.com/zed-industries/zed", branch = "main", features = ["font-kit"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 unicode-segmentation = "1"
@@ -22,9 +22,3 @@ snapshot = ["gpui_platform/test-support", "dep:image"]
 
 [profile.release]
 lto = true
-
-# gpui pins `taffy = "=0.13.0"`; the vendored copy resolves `calc()` values, which
-# upstream returns 0 for. Same patch as vendor/ghia/packages/native/Cargo.toml, so the
-# gpui build is identical.
-[patch.crates-io]
-taffy = { path = "../../vendor/ghia/zed/third_party/taffy" }

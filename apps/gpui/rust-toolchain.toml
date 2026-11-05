@@ -1,4 +1,4 @@
 [toolchain]
-# Same channel as vendor/ghia/rust-toolchain.toml, which matches the pinned zed.
-channel = "1.97.1"
+# Same channel as upstream zed's rust-toolchain.toml at the commit pinned in Cargo.lock; refresh both together.
+channel = "1.98.1"
 profile = "minimal"

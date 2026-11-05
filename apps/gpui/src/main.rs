@@ -359,7 +359,9 @@ impl Mailbox {
     }
 
     fn render_detail(&self) -> impl IntoElement {
-        let pane = div().flex_1().h_full().bg(rgb(0xFFFFFF));
+        // min_w_0: a flex item's automatic minimum width is its min-content width, and gpui measures
+        // unwrapped text at its full line width, so without it the long paragraphs widen the pane.
+        let pane = div().flex_1().min_w_0().h_full().bg(rgb(0xFFFFFF));
         let Some(position) = self.selected else {
             return pane
                 .flex()

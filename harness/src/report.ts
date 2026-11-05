@@ -364,6 +364,7 @@ function renderEnvironment(env: Env): string {
     ...(env.args.apps.includes("ghia")
       ? [env.ghiaSource ? `Ghia from ${env.ghiaSource}.` : `Ghia ${env.ghia.sha ?? "unknown"}, zed ${env.ghia.zedSha ?? "unknown"}.`]
       : []),
+    ...(env.args.apps.includes("gpui") ? [`GPUI app: upstream gpui from ${env.gpui ? `${env.gpui.git} at ${env.gpui.commit}` : "unknown source"}.`] : []),
     ...(env.args.apps.includes("electron") ? [`Electron ${env.electron ? `${env.electron.electron}, Chromium ${env.electron.chromium}` : "unknown"}.`] : []),
     `Bun ${env.bun}, ${env.rustc ?? "rustc unknown"}.`,
     ...(env.mygo ? [`MyGo ${env.mygo.module ?? "module unknown"}, go ${env.mygo.goVersion ?? "unknown"}.`] : []),

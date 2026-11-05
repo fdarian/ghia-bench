@@ -162,6 +162,8 @@ export type Env = {
   electron: { electron: string; chromium: string } | null
   bun: string
   rustc: string | null
+  /** The gpui the GPUI app was built against, from apps/gpui/Cargo.lock; null when the GPUI app is not in the run. */
+  gpui?: { git: string; commit: string } | null
   /** `go` line of apps/mygo/go.mod and the egoist/mygo requirement. */
   mygo?: { goVersion: string | null; module: string | null } | null
   swift?: { swift: string | null; xcode: string | null } | null
