@@ -1,0 +1,11 @@
+{
+  "name": "ghia-bench-harness",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "check": "bun src/bench.ts check",
+    "run": "bun src/bench.ts run",
+    "report": "bun src/bench.ts report",
+    "test": "bun test src"
+  }
+}
