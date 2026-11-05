@@ -12,7 +12,8 @@ pub fn run(window: WindowHandle<Mailbox>, cx: &mut App) {
     let dir = PathBuf::from(std::env::var("MAILBOX_SNAPSHOT_DIR").expect("MAILBOX_SNAPSHOT_DIR"));
     std::fs::create_dir_all(&dir).expect("create snapshot dir");
     cx.spawn(async move |cx: &mut AsyncApp| {
-        let settle = || cx.background_executor().timer(Duration::from_millis(700));
+        let executor = cx.background_executor().clone();
+        let settle = || executor.timer(Duration::from_millis(700));
         settle().await;
         capture(&window, cx, &dir, "1-initial");
 
@@ -29,6 +30,11 @@ pub fn run(window: WindowHandle<Mailbox>, cx: &mut App) {
         window
             .update(cx, |mailbox, window, cx| {
                 mailbox.clear_search(&crate::ClearSearch, window, cx);
+            })
+            .unwrap();
+        settle().await;
+        window
+            .update(cx, |mailbox, _, cx| {
                 for _ in 0..12 {
                     mailbox.move_selection(1, cx);
                 }
@@ -47,7 +53,7 @@ pub fn run(window: WindowHandle<Mailbox>, cx: &mut App) {
         settle().await;
         capture(&window, cx, &dir, "4-empty");
 
-        cx.update(|cx| cx.quit()).unwrap();
+        cx.update(|cx| cx.quit());
     })
     .detach();
 }

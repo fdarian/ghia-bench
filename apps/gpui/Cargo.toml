@@ -18,7 +18,7 @@ image = { version = "0.25", default-features = false, features = ["png"], option
 
 [features]
 # Writes a PNG of the window after the first frames and exits. Never part of the release build.
-snapshot = ["gpui/test-support", "dep:image"]
+snapshot = ["gpui_platform/test-support", "dep:image"]
 
 [profile.release]
 lto = true
