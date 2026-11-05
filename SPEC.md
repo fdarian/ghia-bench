@@ -1,0 +1,93 @@
+# Mailbox app spec
+
+Contract that all three apps (Electron, Ghia, raw GPUI) implement. Apps contain no benchmark code; all measurement is external.
+
+Light theme only. System UI font (SF Pro) everywhere: CSS `system-ui`, gpui `.SystemUIFont`, Ghia default.
+
+## Window
+
+Content area 1280x800 pt (excluding a standard macOS title bar), top-left of the window frame at screen (100, 100) on the main display, title "Mailbox", resizable, opaque. The app activates and takes focus on launch. The search input is focused on launch.
+
+## Data
+
+At startup the app reads `messages.json` from its bundle Resources and parses it (Electron: renderer `fetch('./messages.json')` relative to index.html; Ghia: read + `JSON.parse`; GPUI: `serde_json`). 10,000 messages, newest first. Each message has:
+
+- `id`
+- `fromName`
+- `fromEmail`
+- `subject`
+- `snippet`: first ~140 chars of the body
+- `body`: array of paragraphs
+- `time`: preformatted short, e.g. "14:22" or "Nov 3"
+- `dateLong`: preformatted, e.g. "Thursday, November 5, 2026 at 14:22"
+- `unread`: bool
+- `labels`: 0-2 of 8 label ids
+
+At load, build per message a lowercase haystack = `fromName + " " + subject + " " + snippet`.
+
+Generator (`data/generate.ts`): seed 42, mulberry32; vocabulary of ~300 English words that includes "quarterly" and "report" such that the query "quarterly report" typed char by char narrows from thousands to a few dozen results; 30% unread; 3-8 paragraphs of 2-5 sentences; 200 distinct senders; dates descending from 2026-11-05.
+
+## Layout
+
+Content coordinates, origin top-left, all sizes pt.
+
+### Sidebar: x 0-220, full height
+
+Bg #F4F4F5, 1px right border #E4E4E7.
+
+- "Mailbox" 15px semibold #18181B, row y 0-48, padding-left 16, vertically centered.
+- Folders from y 56: Inbox, Starred, Sent, Drafts, Archive, Spam, Trash. Each row 32 tall, inset 8px each side (so 204 wide), radius 6, padding-x 8; name 13px #27272A left; count 12px #71717A right (Inbox = unread count of all messages; others fixed: 24, 128, 3, 2048, 12, 0 shown as empty).
+  - Inbox selected: bg #E4E4E7.
+  - Hover on others: bg #EBEBED.
+- 16px gap, "LABELS" 11px semibold #A1A1AA, letter-spacing 0.5, row height 24, padding-left 16.
+- 8 labels, rows 28 tall, inset 8, padding-x 8: 8px circle in label colour, 8px gap, name 13px #3F3F46. Static (no click behaviour needed).
+
+  | Label | Colour |
+  | --- | --- |
+  | Work | #2563EB |
+  | Personal | #16A34A |
+  | Finance | #CA8A04 |
+  | Travel | #9333EA |
+  | Family | #DB2777 |
+  | Receipts | #EA580C |
+  | Newsletters | #0891B2 |
+  | Projects | #4F46E5 |
+
+### List column: x 220-640 (420 wide)
+
+Bg #FFFFFF, 1px right border #E4E4E7.
+
+- Search area y 0-56: input at (12, 12) size 396x32, radius 8, bg #F4F4F5, 1px border #E4E4E7, padding-x 10, text 13px #18181B, placeholder "Search mail" #A1A1AA. Focused border #2563EB.
+- Count line y 56-84: "{n} conversations" (n formatted with thousands separator), 12px #71717A, padding-left 16.
+- List y 84-800 (716 tall), vertical scroll, virtualized, rows exactly 72 tall:
+  - Bottom 1px separator #F4F4F5 inside the 72.
+  - Unread: 8px circle #2563EB centred at row (8, 21).
+  - Avatar: 36px circle at (16, 12), bg = AVATAR[hash(fromName) % 8], initials (first letter of first two words) 13px semibold #FFFFFF centred.
+    - AVATAR = #F87171 #FB923C #FBBF24 #34D399 #22D3EE #60A5FA #A78BFA #F472B6.
+    - hash = sum of UTF-16 code units of fromName (simple, identical in all three).
+  - Text column from x 64 to row width - 16:
+    - line 1 y 12-30: fromName 13px, semibold #18181B if unread else medium #3F3F46; time 12px #71717A right-aligned.
+    - line 2 y 30-48: subject 13px #27272A, one line, ellipsis.
+    - line 3 y 48-64: snippet 12px #71717A, one line, ellipsis.
+  - Hover bg #F4F4F5; selected bg #DBEAFE (selected wins over hover).
+  - Click selects the row.
+
+### Detail pane: x 640-1280 (640 wide)
+
+Bg #FFFFFF, vertical scroll, padding 32 all sides.
+
+- Subject 22px semibold #18181B, line-height 28, wraps.
+- 16px gap; sender row 40 tall: 40px avatar (same colour/initials rule, initials 15px), 12px gap, column: fromName 14px semibold #18181B, fromEmail 13px #71717A; dateLong 12px #71717A right-aligned, top.
+- 24px gap; body paragraphs 14px #27272A line-height 22, 14px between paragraphs, wrap at 576 width.
+- No selection (empty filter result): "No message selected" 14px #A1A1AA centred in the pane.
+
+## Behaviour
+
+- Filter: on every input change, query = value.trim().toLowerCase(); empty -> all messages; else the messages whose haystack contains query (substring). Synchronous, no debounce.
+- On filter change: selection = first result (or none), list scrolled to top, detail scrolled to top.
+- ArrowDown / ArrowUp (while search input focused): move selection +-1 (clamped), scroll the list so the selected row is fully visible (minimal scroll), detail scrolled to top. Must not move the text caret.
+- Escape: clear the search.
+- Selected on launch: first message (detail shows it on the first frame).
+
+## Parity notes
+

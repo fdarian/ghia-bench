@@ -1,0 +1,7 @@
+{
+  "name": "ghia-bench",
+  "private": true,
+  "scripts": {
+    "data": "bun data/generate.ts"
+  }
+}
