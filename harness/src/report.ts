@@ -359,7 +359,26 @@ export function captureWarnings(env: Env, data: AppData[]): string[] {
       + "its frame rate and latencies are capture-bound, not app-bound.",
     )
   }
+  for (const source of deliverySources(data)) {
+    if (!DELIVERY_PHASES.includes(source.name)) continue
+    const silent = source.app.sessions.filter((session) => {
+      const phase = phaseOf(session, source.name)
+      return phase !== undefined && phase.delivery && !showedChange(phase)
+    })
+    if (silent.length > 0) {
+      warnings.push(
+        `WARNING ${APP_LABELS[source.app.app]} ${source.name}: no frame showed a change in the target region in ${silent.length} of ${source.sessions.length} sessions; `
+        + "the input had no visible effect or the capture missed it.",
+      )
+    }
+  }
   return warnings
+}
+
+function showedChange(phase: PhaseAnalysis): boolean {
+  if (phase.motion) return phase.motion.frames > 0
+  const latencies = [phase.echoMs, phase.detailMs].find((entry) => entry !== undefined && entry !== null)
+  return latencies !== undefined && latencies !== null && latencies.some((value) => value !== null)
 }
 
 function renderDelivery(env: Env, data: AppData[]): string {
@@ -527,7 +546,7 @@ export function buildReport(env: Env, records: RunRecord[], options: { includeIn
     bulletList(METHOD_NOTES),
   ]
   const warnings = captureWarnings(env, data)
-  if (warnings.length > 0) parts.push(bulletList(warnings))
+  if (warnings.length > 0) parts.push(`**${warnings.length} capture warning(s), see Validity > Capture delivery: the affected fps and latency numbers may be capture-bound or empty.**`)
   for (const app of data) {
     const breakdown = renderBreakdown(app)
     if (breakdown) parts.push(`## ${APP_LABELS[app.app]} per-process breakdown`, breakdown)

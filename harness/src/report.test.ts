@@ -98,6 +98,16 @@ describe("buildReport", () => {
     expect(report.match(/per-process breakdown/g)!.length).toBe(1)
   })
 
+  test("a phase whose target region never changed is warned about", () => {
+    const quiet = session(0, true)
+    const scroll = quiet.phases.scroll
+    if (scroll.status !== "ok") throw new Error("fixture scroll phase must be ok")
+    scroll.data.frames = scroll.data.frames!.map((entry) => ({ ...entry, changed: [] }))
+    const report = buildReport(env, [quiet], { includeInvalid: false })
+    expect(report).toContain("WARNING Electron scroll: no frame showed a change in the target region in 1 of 1 sessions")
+    expect(report).not.toContain("WARNING Electron type: no frame")
+  })
+
   test("skipped and failed phases are listed with their reasons; usage is still reported", () => {
     const report = buildReport(env, records, { includeInvalid: false })
     expect(report).toContain("synthetic skip")
