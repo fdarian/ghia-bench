@@ -36,7 +36,7 @@ Input is posted to the app's pid with `CGEventPostToPid`, at positions derived f
 
 ## Setup
 
-Prerequisites: macOS on Apple silicon, Xcode with the Metal toolchain (and Swift 6 for the SwiftUI app), [rustup](https://rustup.rs), [Go](https://go.dev) 1.27.3 or newer (MyGo), [Bun](https://bun.sh), pnpm and Node. Ghia is cloned from a local checkout (`GHIA_SRC`, default `~/code/fdarian/ghia`, which must contain the pinned `GHIA_REV` and its zed revision).
+Prerequisites: macOS on Apple silicon, Xcode with the Metal toolchain (and Swift 6 for the SwiftUI app), [rustup](https://rustup.rs), [Go](https://go.dev) 1.27.3 or newer (MyGo), [Bun](https://bun.sh), pnpm and Node. Ghia is cloned from GitHub at the pinned `GHIA_REV`, with its `zed` submodule fetched as a single blobless commit (still a few hundred MB). To use a local checkout instead, set `GHIA_SRC=/path/to/ghia`; it must contain the pinned `GHIA_REV` and its zed revision.
 
 ```
 scripts/build-all.sh
@@ -49,7 +49,7 @@ From a fresh clone this builds the pinned Ghia (`scripts/setup-ghia.sh`), genera
 
 - Each step is also runnable alone: `scripts/setup-ghia.sh`, `bun run data`, `harness/helper/build.sh` (writes `harness/bin/benchhelper`), `apps/<electron|ghia|gpui|swiftui|mygo>/build.sh`. Each app script installs its own dependencies from its lockfile.
 - The harness has no dependencies to install.
-- The Ghia and GPUI cargo builds go through a machine-wide lock script when `GHIA_HEAVY` (default `~/.claude/notes/plans/gpuix-heavy.sh`) points at an executable file, and run directly otherwise; `setup-ghia.sh` and `apps/gpui/build.sh` and `apps/mygo/build.sh` all honour it.
+- Optional env vars: `GHIA_SRC=/path/to/ghia` (local Ghia checkout, see above) and `GHIA_HEAVY=<wrapper>`, a command such as a lock script that the Ghia native build and the GPUI and MyGo builds are run through (`$GHIA_HEAVY cargo build --release`). Without it, or if it is not executable, they run directly. `setup-ghia.sh`, `apps/gpui/build.sh` and `apps/mygo/build.sh` honour both as applicable.
 - A missing bundle is skipped by the harness unless you name it in `--apps`.
 
 </details>

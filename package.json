@@ -1,6 +1,7 @@
 {
   "name": "ghia-bench",
   "private": true,
+  "license": "MIT",
   "scripts": {
     "data": "bun data/generate.ts"
   }

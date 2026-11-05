@@ -8,9 +8,9 @@ app="$root/dist/Mailbox-MyGo.app"
 [ -f "$root/data/messages.json" ] || bun "$root/data/generate.ts"
 
 cd "$here"
-# Optional machine-wide lock script that serialises heavy builds; run the build directly without it.
-heavy="${GHIA_HEAVY:-$HOME/.claude/notes/plans/gpuix-heavy.sh}"
-if [ -x "$heavy" ]; then
+# Optional wrapper command ($GHIA_HEAVY, e.g. a lock script) that serialises heavy builds; run the build directly without it.
+heavy="${GHIA_HEAVY:-}"
+if [ -n "$heavy" ] && [ -x "$heavy" ]; then
   "$heavy" go tool mygo build -skip-dmg -skip-notarize
 else
   go tool mygo build -skip-dmg -skip-notarize

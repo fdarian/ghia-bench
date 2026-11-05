@@ -6,9 +6,9 @@ root=$(cd "$here/../.." && pwd)
 app="$root/dist/Mailbox-GPUI.app"
 
 cd "$here"
-# Optional machine-wide lock script that serialises heavy builds; run cargo directly without it.
-heavy="${GHIA_HEAVY:-$HOME/.claude/notes/plans/gpuix-heavy.sh}"
-if [ -x "$heavy" ]; then
+# Optional wrapper command ($GHIA_HEAVY, e.g. a lock script) that serialises heavy builds; run cargo directly without it.
+heavy="${GHIA_HEAVY:-}"
+if [ -n "$heavy" ] && [ -x "$heavy" ]; then
   "$heavy" cargo build --release
 else
   cargo build --release
