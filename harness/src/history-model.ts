@@ -191,16 +191,17 @@ function escapeXml(text: string): string {
 
 /** A line chart of one Ghia value per entry, y axis from 0; entries without a value leave a gap. */
 export function lineChartSvg(spec: ChartSpec, entries: HistoryEntry[]): string {
-  const width = 400
+  const width = 440
   const height = 190
-  const left = 48
+  const left = 56
   const right = 16
   const top = 34
   const bottom = 36
   const values = entries.map((entry) => metricValue(entry, "ghia", spec.key))
   const present = values.filter((value): value is number => value !== undefined)
-  const max = present.length === 0 ? 1 : Math.max(...present) * 1.15
-  const x = (index: number) => (entries.length === 1 ? (left + width - right) / 2 : left + ((width - left - right) * index) / (entries.length - 1))
+  const max = present.length === 0 ? 1 : Math.max(...present) * 1.35
+  const inset = 36
+  const x = (index: number) => (entries.length === 1 ? (left + width - right) / 2 : left + inset + ((width - left - right - 2 * inset) * index) / (entries.length - 1))
   const y = (value: number) => top + (height - top - bottom) * (1 - value / max)
   const gray = "#888"
   const parts = [
