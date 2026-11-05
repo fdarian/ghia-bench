@@ -36,19 +36,38 @@ private enum KeyCode {
 
 private let eventSource = CGEventSource(stateID: .privateState)
 
-private func mouseMove(to point: CGPoint, deltaY: Int, offsetNs: UInt64) throws -> PlannedInput {
+private typealias SetWindowLocation = @convention(c) (CGEvent, CGPoint) -> Void
+private let setWindowLocation: SetWindowLocation? = {
+    guard let handle = dlopen("/System/Library/PrivateFrameworks/SkyLight.framework/SkyLight", RTLD_LAZY),
+          let symbol = dlsym(handle, "SLEventSetWindowLocation")
+    else { return nil }
+    return unsafeBitCast(symbol, to: SetWindowLocation.self)
+}()
+
+/// A CGEventPostToPid event carries no window: AppKit keeps the screen location as the window location and
+/// never routes a scroll wheel event to a view (mouse moves are rescued by tracking areas). Field 51 is the
+/// event's window number; the window location is in points from the window's top-left corner.
+private func assignWindow(_ event: CGEvent, geometry: Geometry, at point: CGPoint) throws {
+    guard let setWindowLocation = setWindowLocation else { throw HelperError("SLEventSetWindowLocation is not available") }
+    event.setIntegerValueField(CGEventField(rawValue: 51)!, value: Int64(geometry.windowNumber))
+    setWindowLocation(event, CGPoint(x: point.x - geometry.frame.minX, y: point.y - geometry.frame.minY))
+}
+
+private func mouseMove(to point: CGPoint, deltaY: Int, offsetNs: UInt64, geometry: Geometry) throws -> PlannedInput {
     guard let event = CGEvent(mouseEventSource: eventSource, mouseType: .mouseMoved, mouseCursorPosition: point, mouseButton: .left)
     else { throw HelperError("CGEvent mouseMoved creation failed") }
     event.setIntegerValueField(.mouseEventDeltaY, value: Int64(deltaY))
+    try assignWindow(event, geometry: geometry, at: point)
     return PlannedInput(offsetNs: offsetNs, event: event, kind: "move", x: Double(point.x), y: Double(point.y))
 }
 
-private func scrollEvent(at point: CGPoint, dy: Int32, offsetNs: UInt64) throws -> PlannedInput {
+private func scrollEvent(at point: CGPoint, dy: Int32, offsetNs: UInt64, geometry: Geometry) throws -> PlannedInput {
     guard let event = CGEvent(
         scrollWheelEvent2Source: eventSource, units: .pixel, wheelCount: 1, wheel1: dy, wheel2: 0, wheel3: 0)
     else { throw HelperError("CGEvent scroll creation failed") }
     event.location = point
     event.setIntegerValueField(.scrollWheelEventIsContinuous, value: 1)
+    try assignWindow(event, geometry: geometry, at: point)
     return PlannedInput(offsetNs: offsetNs, event: event, kind: "scroll", dy: Int(dy), x: Double(point.x), y: Double(point.y))
 }
 
@@ -72,23 +91,24 @@ private func plan(name: String, geometry: Geometry) throws -> (setup: PlannedInp
     switch name {
     case "scroll":
         let point = geometry.global(x: listCentre.x, y: listCentre.y)
-        let setup = try mouseMove(to: point, deltaY: 0, offsetNs: 0)
+        let setup = try mouseMove(to: point, deltaY: 0, offsetNs: 0, geometry: geometry)
         let perLeg = Int(rateHz) * 3
         // Negative wheel1 scrolls the content down (toward later rows); positive scrolls back up.
         let events = try (0..<(perLeg * 2)).map { index in
-            try scrollEvent(at: point, dy: index < perLeg ? -30 : 30, offsetNs: UInt64(index) * step)
+            try scrollEvent(at: point, dy: index < perLeg ? -30 : 30, offsetNs: UInt64(index) * step, geometry: geometry)
         }
         return (setup, events)
     case "hover":
         let perLeg = Int(rateHz) * 2
         let ys: [CGFloat] = (0..<perLeg).map { listTop + (listBottom - listTop) * CGFloat($0) / CGFloat(perLeg - 1) }
         let path = ys + ys.reversed()
-        let setup = try mouseMove(to: geometry.global(x: listCentre.x, y: listTop), deltaY: 0, offsetNs: 0)
+        let setup = try mouseMove(to: geometry.global(x: listCentre.x, y: listTop), deltaY: 0, offsetNs: 0, geometry: geometry)
         var events: [PlannedInput] = []
         for (index, y) in path.enumerated() {
             let delta = index == 0 ? 0 : Int((y - path[index - 1]).rounded())
             events.append(try mouseMove(
-                to: geometry.global(x: listCentre.x, y: y), deltaY: delta, offsetNs: UInt64(index) * step))
+                to: geometry.global(x: listCentre.x, y: y), deltaY: delta, offsetNs: UInt64(index) * step,
+                geometry: geometry))
         }
         return (setup, events)
     case "type":

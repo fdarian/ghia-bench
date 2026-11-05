@@ -29,6 +29,7 @@ func log(_ source: String, _ event: NSEvent) {
     var entry: [String: Any] = [
         "recvNs": machNs(), "src": source, "type": event.type.rawValue,
         "x": event.locationInWindow.x, "y": event.locationInWindow.y,
+        "win": event.windowNumber, "hasWindow": event.window != nil,
     ]
     switch event.type {
     case .scrollWheel:

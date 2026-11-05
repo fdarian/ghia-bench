@@ -51,13 +51,15 @@ let contentHeight: CGFloat = 800
 struct Geometry {
     let frame: CGRect
     let titlebar: CGFloat
+    let windowNumber: Int
 
-    init(frame: CGRect) throws {
+    init(frame: CGRect, windowNumber: Int) throws {
         guard frame.height >= contentHeight else {
             throw HelperError("window frame height \(frame.height) is below the 800pt content height")
         }
         self.frame = frame
         self.titlebar = frame.height - contentHeight
+        self.windowNumber = windowNumber
     }
 
     func global(x: CGFloat, y: CGFloat) -> CGPoint {
@@ -70,7 +72,7 @@ func liveGeometry(pid: pid_t) throws -> Geometry {
     guard let window = WindowList.mainWindow(of: pid, in: windows) else {
         throw HelperError("no on-screen app window for pid \(pid)")
     }
-    return try Geometry(frame: window.frame)
+    return try Geometry(frame: window.frame, windowNumber: window.number)
 }
 
 func windowStatus(pid: pid_t) throws -> [String: Any] {
