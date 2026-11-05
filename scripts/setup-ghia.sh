@@ -51,7 +51,11 @@ if [ "${FORCE_BUILD:-0}" != 1 ] && [ -f "$addon" ] && [ "$(cat "$stamp" 2>/dev/n
   echo "addon already built for $want (FORCE_BUILD=1 to rebuild)"
 else
   rm -f "$stamp"
-  (cd "$dest/packages/native" && "$HEAVY" bun run build)
+  if [ -x "$HEAVY" ]; then
+    (cd "$dest/packages/native" && "$HEAVY" bun run build)
+  else
+    (cd "$dest/packages/native" && bun run build)
+  fi
   echo "$want" > "$stamp"
 fi
 

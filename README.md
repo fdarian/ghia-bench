@@ -47,7 +47,7 @@ From a fresh clone this builds the pinned Ghia (`scripts/setup-ghia.sh`), genera
 
 - Each step is also runnable alone: `scripts/setup-ghia.sh`, `bun run data`, `harness/helper/build.sh` (writes `harness/bin/benchhelper`), `apps/<electron|ghia|gpui>/build.sh`. Each app script installs its own dependencies from its lockfile.
 - The harness has no dependencies to install.
-- The Ghia and GPUI cargo builds go through a shared lock script (`~/.claude/notes/plans/gpuix-heavy.sh`; `GHIA_HEAVY` overrides it for `setup-ghia.sh`, `apps/gpui/build.sh` hardcodes it).
+- The Ghia and GPUI cargo builds go through a machine-wide lock script when `GHIA_HEAVY` (default `~/.claude/notes/plans/gpuix-heavy.sh`) points at an executable file, and run directly otherwise; `setup-ghia.sh` and `apps/gpui/build.sh` both honour it.
 - A missing bundle is skipped by the harness unless you name it in `--apps`.
 
 </details>
