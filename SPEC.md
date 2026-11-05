@@ -91,3 +91,5 @@ Bg #FFFFFF, vertical scroll, padding 32 all sides.
 
 ## Parity notes
 
+
+- Electron: `fetch('./messages.json')` is async, so `ready-to-show` can fire before the list and detail are filled (a few ms later); the sidebar, search input and empty list column are painted first. `app.focus({ steal: true })` is requested per the spec, but macOS may still decline activation when the process is spawned from a background process (observed: another app stayed frontmost).
