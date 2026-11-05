@@ -1,6 +1,6 @@
 # Mailbox app spec
 
-Contract that all three apps (Electron, Ghia, raw GPUI) implement. Apps contain no benchmark code; all measurement is external.
+Contract that all five apps (Electron, Ghia, raw GPUI, SwiftUI, MyGo) implement. Apps contain no benchmark code; all measurement is external.
 
 Light theme only. System UI font (SF Pro) everywhere: CSS `system-ui`, gpui `.SystemUIFont`, Ghia default.
 
@@ -66,7 +66,7 @@ Bg #FFFFFF, 1px right border #E4E4E7.
   - Unread: 8px circle #2563EB centred at row (8, 21).
   - Avatar: 36px circle at (16, 12), bg = AVATAR[hash(fromName) % 8], initials (first letter of first two words) 13px semibold #FFFFFF centred.
     - AVATAR = #F87171 #FB923C #FBBF24 #34D399 #22D3EE #60A5FA #A78BFA #F472B6.
-    - hash = sum of UTF-16 code units of fromName (simple, identical in all three).
+    - hash = sum of UTF-16 code units of fromName (simple, identical in all five).
   - Text column from x 64 to row width - 16:
     - line 1 y 12-30: fromName 13px, semibold #18181B if unread else medium #3F3F46; time 12px #71717A right-aligned.
     - line 2 y 30-48: subject 13px #27272A, one line, ellipsis.
@@ -114,3 +114,4 @@ Both scroll areas (the list and the detail pane) show an overlay scrollbar on th
 - SwiftUI: line heights (`lineHeight(_:size:)`) are the natural font line height topped up with `lineSpacing` plus half of it above the first line, since SwiftUI has no exact line height before macOS 26; glyph positions can differ from CSS by up to 1 pt (subject 1.3 pt higher than Electron, body 0.6 pt).
 - SwiftUI: the caret is the native NSTextField insertion point (1 pt wide, system blink); its period was not measured and its tint is set to #18181B with `.tint`.
 - SwiftUI: the search text starts 1 pt further right (`padding(.leading, 11)`) to land where the other apps put it, because with symmetric 10 pt padding a plain `TextField` text landed 1 pt left of the Electron reference.
+- SwiftUI: the type-phase cost is about 85% Swift's `String.contains` (grapheme-aware, Foundation-backed) in the filter, not SwiftUI rendering; the other apps' standard substring searches are byte-level. The app keeps the idiomatic call.
