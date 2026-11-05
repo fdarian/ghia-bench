@@ -4,8 +4,8 @@
 set -euo pipefail
 
 GHIA_SRC="${GHIA_SRC:-$HOME/code/fdarian/ghia}"
-GHIA_REV="${GHIA_REV:-66c40462dcbdef26a42fac5186535a1977478067}"
-ZED_REV="${ZED_REV:-df16dbc2b39d1a4216e51fdf07dc668d74151255}"
+GHIA_REV="${GHIA_REV:-8fcd806f5969c5eafc00ee1114ef7b66d8a2ca15}"
+ZED_REV="${ZED_REV:-451f7ec4d15f7d7444a1f347d5b916e2a7989bab}"
 HEAVY="${GHIA_HEAVY:-$HOME/.claude/notes/plans/gpuix-heavy.sh}"
 
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
