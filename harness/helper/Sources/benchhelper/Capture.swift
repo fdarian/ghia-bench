@@ -37,7 +37,9 @@ func baseConfiguration(width: Int, height: Int, refreshHz: Double) -> SCStreamCo
     config.width = width
     config.height = height
     config.pixelFormat = kCVPixelFormatType_32BGRA
-    config.minimumFrameInterval = CMTime(value: 1, timescale: CMTimeScale(refreshHz.rounded()))
+    // Asking for exactly the display interval makes SCK drop every frame that arrives a hair early (display
+    // timestamps jitter), halving the delivery rate; ask for twice the rate so the display is the only limit.
+    config.minimumFrameInterval = CMTime(value: 1, timescale: CMTimeScale(refreshHz.rounded()) * 2)
     config.queueDepth = 8
     config.showsCursor = false
     config.colorSpaceName = CGColorSpace.sRGB
@@ -45,12 +47,91 @@ func baseConfiguration(width: Int, height: Int, refreshHz: Double) -> SCStreamCo
     return config
 }
 
+/// What the stream delivered, independent of what the pixels did: lets a report tell a capture-bound frame
+/// rate from an app-bound one.
+final class DeliveryStats {
+    private let lock = NSLock()
+    private let displayIntervalNs: Double
+    private var statusCounts: [String: Int] = [:]
+    private var complete = 0
+    private var firstNs: UInt64?
+    private var lastNs: UInt64?
+    private var intervalSumNs: Double = 0
+    private var maxIntervalNs: Double = 0
+    private var gaps = 0
+    private var handlerSumNs: Double = 0
+    private var handlerMaxNs: Double = 0
+    private var lagSumNs: Double = 0
+    private var lagMaxNs: Double = 0
+    private var dirtyFrames = 0
+    private var cleanFrames = 0
+
+    init(displayHz: Double) {
+        displayIntervalNs = 1e9 / displayHz
+    }
+
+    func record(status: String) {
+        lock.lock()
+        statusCounts[status, default: 0] += 1
+        lock.unlock()
+    }
+
+    func recordComplete(displayNs: UInt64, arrivalNs: UInt64, handlerNs: UInt64, dirtyRectCount: Int?) {
+        lock.lock()
+        defer { lock.unlock() }
+        complete += 1
+        if let last = lastNs {
+            let interval = Double(displayNs) - Double(last)
+            intervalSumNs += interval
+            maxIntervalNs = max(maxIntervalNs, interval)
+            if interval > 1.5 * displayIntervalNs { gaps += 1 }
+        } else {
+            firstNs = displayNs
+        }
+        lastNs = displayNs
+        handlerSumNs += Double(handlerNs)
+        handlerMaxNs = max(handlerMaxNs, Double(handlerNs))
+        let lag = Double(arrivalNs) - Double(displayNs)
+        lagSumNs += lag
+        lagMaxNs = max(lagMaxNs, lag)
+        if let count = dirtyRectCount {
+            if count > 0 { dirtyFrames += 1 } else { cleanFrames += 1 }
+        }
+    }
+
+    func json(requestedIntervalMs: Double) -> [String: Any] {
+        lock.lock()
+        defer { lock.unlock() }
+        let intervals = max(complete - 1, 1)
+        let frames = max(complete, 1)
+        return [
+            "requestedIntervalMs": requestedIntervalMs,
+            "statusCounts": statusCounts,
+            "complete": complete,
+            "meanIntervalMs": intervalSumNs / Double(intervals) / 1e6,
+            "maxIntervalMs": maxIntervalNs / 1e6,
+            "gapsOver1p5": gaps,
+            "handlerMeanMs": handlerSumNs / Double(frames) / 1e6,
+            "handlerMaxMs": handlerMaxNs / 1e6,
+            "displayLagMeanMs": lagSumNs / Double(frames) / 1e6,
+            "displayLagMaxMs": lagMaxNs / 1e6,
+            "framesWithDirtyRects": dirtyFrames,
+            "framesWithoutDirtyRects": cleanFrames,
+        ]
+    }
+}
+
 final class FrameCapture: NSObject, SCStreamOutput, SCStreamDelegate {
     private var stream: SCStream?
     private let queue = DispatchQueue(label: "benchhelper.capture", qos: .userInteractive)
     private let lock = NSLock()
     private var stopError: Error?
+    let stats: DeliveryStats
     var onFrame: ((CVPixelBuffer, UInt64) -> Void)?
+
+    init(displayHz: Double) {
+        stats = DeliveryStats(displayHz: displayHz)
+    }
 
     var streamError: String? {
         lock.lock()
@@ -85,15 +166,36 @@ final class FrameCapture: NSObject, SCStreamOutput, SCStreamDelegate {
     }
 
     func stream(_ stream: SCStream, didOutputSampleBuffer sampleBuffer: CMSampleBuffer, of type: SCStreamOutputType) {
+        let arrivalTicks = mach_absolute_time()
         guard type == .screen, CMSampleBufferIsValid(sampleBuffer) else { return }
         guard let attachments = CMSampleBufferGetSampleAttachmentsArray(sampleBuffer, createIfNecessary: false) as? [[SCStreamFrameInfo: Any]],
               let info = attachments.first,
-              let statusRaw = info[.status] as? Int,
-              SCFrameStatus(rawValue: statusRaw) == .complete,
+              let statusRaw = info[.status] as? Int
+        else { return }
+        let status = SCFrameStatus(rawValue: statusRaw)
+        stats.record(status: status.map(FrameCapture.name) ?? "unknown(\(statusRaw))")
+        guard status == .complete,
               let displayTicks = info[.displayTime] as? UInt64,
               let pixels = CMSampleBufferGetImageBuffer(sampleBuffer)
         else { return }
+        let dirtyRects = (info[.dirtyRects] as? [Any])?.count
         onFrame?(pixels, Mach.ns(fromTicks: displayTicks))
+        let doneTicks = mach_absolute_time()
+        stats.recordComplete(
+            displayNs: Mach.ns(fromTicks: displayTicks), arrivalNs: Mach.ns(fromTicks: arrivalTicks),
+            handlerNs: Mach.ns(fromTicks: doneTicks) - Mach.ns(fromTicks: arrivalTicks), dirtyRectCount: dirtyRects)
+    }
+
+    private static func name(_ status: SCFrameStatus) -> String {
+        switch status {
+        case .complete: return "complete"
+        case .idle: return "idle"
+        case .blank: return "blank"
+        case .suspended: return "suspended"
+        case .started: return "started"
+        case .stopped: return "stopped"
+        @unknown default: return "unknown"
+        }
     }
 
     func stream(_ stream: SCStream, didStopWithError error: Error) {
@@ -147,13 +249,18 @@ struct Region {
     let h: Double
 }
 
-let trackedRegions = [
-    Region(name: "search", x: 232, y: 12, w: 396, h: 32),
-    Region(name: "count", x: 220, y: 56, w: 420, h: 28),
-    Region(name: "list", x: 220, y: 84, w: 420, h: 716),
-    Region(name: "detail", x: 640, y: 0, w: 640, h: 800),
-    Region(name: "sidebar", x: 0, y: 0, w: 220, h: 800),
-]
+/// The window content in the spec's coordinates plus the title bar (negative y); the hashes cover every pixel
+/// of a region because the search caret is a 1 pt line that a sampled hash misses half of the time.
+func trackedRegions(titlebar: Double) -> [Region] {
+    [
+        Region(name: "search", x: 232, y: 12, w: 396, h: 32),
+        Region(name: "count", x: 220, y: 56, w: 420, h: 28),
+        Region(name: "list", x: 220, y: 84, w: 420, h: 716),
+        Region(name: "detail", x: 640, y: 0, w: 640, h: 800),
+        Region(name: "sidebar", x: 0, y: 0, w: 220, h: 800),
+        Region(name: "titlebar", x: 0, y: -titlebar, w: 1280, h: titlebar),
+    ]
+}
 
 func hashRegion(_ view: PixelView, _ region: Region, _ map: ContentMapping) -> UInt64 {
     let x0 = max(0, map.px(region.x)), x1 = min(view.width, map.px(region.x + region.w))
@@ -163,11 +270,12 @@ func hashRegion(_ view: PixelView, _ region: Region, _ map: ContentMapping) -> U
     while y < y1 {
         let row = UnsafeRawPointer(view.base + y * view.bytesPerRow)
         var x = x0
-        while x < x1 {
-            hash = (hash ^ UInt64(row.load(fromByteOffset: x * 4, as: UInt32.self))) &* 1099511628211
+        while x + 1 < x1 {
+            hash = (hash ^ row.loadUnaligned(fromByteOffset: x * 4, as: UInt64.self)) &* 1099511628211
             x += 2
         }
-        y += 2
+        if x < x1 { hash = (hash ^ UInt64(row.load(fromByteOffset: x * 4, as: UInt32.self))) &* 1099511628211 }
+        y += 1
     }
     return hash
 }
@@ -184,10 +292,12 @@ final class RegionRecorder {
     private var previous: [UInt64]?
     private let geometry: Geometry
     private let windowSize: CGSize
+    private let regions: [Region]
 
     init(geometry: Geometry) {
         self.geometry = geometry
         self.windowSize = geometry.frame.size
+        self.regions = trackedRegions(titlebar: Double(geometry.titlebar))
     }
 
     func consume(_ buffer: CVPixelBuffer, displayNs: UInt64) {
@@ -196,13 +306,13 @@ final class RegionRecorder {
                 scaleX: Double(view.width) / Double(windowSize.width),
                 scaleY: Double(view.height) / Double(windowSize.height),
                 originX: 0, originY: 0, titlebar: Double(geometry.titlebar))
-            return trackedRegions.map { hashRegion(view, $0, map) }
+            return regions.map { hashRegion(view, $0, map) }
         }
         guard let hashes = hashes else { return }
         lock.lock()
         defer { lock.unlock() }
         if let previous = previous {
-            let changed = trackedRegions.indices.filter { hashes[$0] != previous[$0] }.map { trackedRegions[$0].name }
+            let changed = regions.indices.filter { hashes[$0] != previous[$0] }.map { regions[$0].name }
             recorded.append(Frame(tNs: displayNs, changed: changed, first: false))
         } else {
             recorded.append(Frame(tNs: displayNs, changed: [], first: true))

@@ -186,7 +186,7 @@ private func startWindowCapture(
         width: Int(window.frame.width), height: Int(window.frame.height), refreshHz: refreshHz)
     config.ignoreShadowsSingleWindow = true
     let recorder = RegionRecorder(geometry: geometry)
-    let capture = FrameCapture()
+    let capture = FrameCapture(displayHz: refreshHz)
     capture.onFrame = { buffer, ns in recorder.consume(buffer, displayNs: ns) }
     try capture.start(filter: SCContentFilter(desktopIndependentWindow: scWindow), config: config)
     return (capture, recorder)
@@ -272,6 +272,9 @@ func phase(args: Args) throws -> [String: Any] {
         }
     } else {
         result["frames"] = NSNull()
+    }
+    if let capture = capture {
+        result["delivery"] = capture.stats.json(requestedIntervalMs: 500.0 / refreshHz)
     }
     if let captureError = captureError { result["captureError"] = captureError }
     return result

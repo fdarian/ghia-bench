@@ -56,10 +56,13 @@ private func openApp(at path: String) throws -> pid_t {
 }
 
 private final class LaunchCapture {
-    let capture = FrameCapture()
+    let capture: FrameCapture
     let detector: ReadyDetector
 
-    init(detector: ReadyDetector) { self.detector = detector }
+    init(detector: ReadyDetector, displayHz: Double) {
+        self.detector = detector
+        self.capture = FrameCapture(displayHz: displayHz)
+    }
 }
 
 /// Starts the display stream cropped to the expected window rect. Throws CaptureUnavailable.
@@ -81,7 +84,7 @@ private func startDisplayCapture(refreshHz: Double, notBeforeNs: UInt64) throws 
     config.sourceRect = crop
     let mapping = ContentMapping(scaleX: 1, scaleY: 1, originX: 0, originY: 0, titlebar: expectedTitlebar)
     let launchCapture = LaunchCapture(detector: ReadyDetector(
-        mapping: mapping, notBeforeNs: notBeforeNs))
+        mapping: mapping, notBeforeNs: notBeforeNs), displayHz: refreshHz)
     launchCapture.capture.onFrame = { [detector = launchCapture.detector] buffer, ns in
         detector.consume(buffer, displayNs: ns)
     }
