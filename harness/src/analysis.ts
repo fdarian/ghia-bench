@@ -132,21 +132,32 @@ export function footprintTotal(sample: Sample): number {
   return sample.procs.reduce((sum, proc) => sum + proc.footprint, 0)
 }
 
-export const ELECTRON_GROUPS = ["main", "renderer", "gpu", "network/utility", "other"] as const
+export const ELECTRON_GROUPS = ["main", "renderer", "gpu", "network", "other"] as const
 export type ElectronGroup = (typeof ELECTRON_GROUPS)[number]
 
-/** proc_name truncates at 32 characters, so "Mailbox-Electron Helper (Renderer)" arrives as "...(Rendere". */
-export function electronGroupOf(name: string | null, isRoot: boolean): ElectronGroup {
+/**
+ * Electron's GPU and network processes both run the plain "Helper" executable, so the name alone cannot tell them
+ * apart; `type` is the Chromium process type from the command line (see TreeTracker.refreshTypes). The name is only
+ * the fallback for renderers, and proc_name truncates at 32 characters ("...(Rendere").
+ */
+export function electronGroupOf(name: string | null, isRoot: boolean, type: string | null): ElectronGroup {
   if (isRoot) return "main"
-  if (name === null) return "other"
-  if (/Helper \(Render/.test(name)) return "renderer"
-  if (/Helper \(GPU/.test(name)) return "gpu"
-  if (/Helper$/.test(name)) return "network/utility"
+  if (type !== null) {
+    if (type === "renderer") return "renderer"
+    if (type === "gpu-process") return "gpu"
+    if (type.startsWith("utility:network")) return "network"
+    return "other"
+  }
+  if (name !== null && /Helper \(Render/.test(name)) return "renderer"
   return "other"
 }
 
-export function groupFunction(app: AppId, rootPid: number): (proc: Proc) => string {
-  if (app === "electron") return (proc) => electronGroupOf(proc.name, proc.pid === rootPid)
+export function groupFunction(
+  app: AppId, rootPid: number, types: Record<string, string>,
+): (proc: Proc) => string {
+  if (app === "electron") {
+    return (proc) => electronGroupOf(proc.name, proc.pid === rootPid, proc.pid in types ? types[proc.pid] : null)
+  }
   return () => "all"
 }
 
@@ -262,9 +273,8 @@ export type SessionAnalysis = {
 }
 
 function analyzePhase(
-  name: PhaseName, data: PhaseOutput, app: AppId, rootPid: number, refreshHz: number,
+  name: PhaseName, data: PhaseOutput, groupOf: (proc: Proc) => string, refreshHz: number,
 ): PhaseAnalysis {
-  const groupOf = groupFunction(app, rootPid)
   const analysis: PhaseAnalysis = {
     usage: diffUsage(data.rusageBefore, data.rusageAfter),
     groups: diffUsageByGroup(data.rusageBefore, data.rusageAfter, groupOf),
@@ -293,12 +303,12 @@ function analyzePhase(
 
 export function analyzeSession(record: SessionRecord, refreshHz: number): SessionAnalysis {
   const rootPid = record.launch ? record.launch.pid : -1
+  const groupOf = groupFunction(record.app, rootPid, record.processTypes)
   const phases: Partial<Record<PhaseName, PhaseAnalysis>> = {}
   for (const name of Object.keys(record.phases) as PhaseName[]) {
     const phase = record.phases[name]
-    if (phase.status === "ok") phases[name] = analyzePhase(name, phase.data, record.app, rootPid, refreshHz)
+    if (phase.status === "ok") phases[name] = analyzePhase(name, phase.data, groupOf, refreshHz)
   }
-  const groupOf = groupFunction(record.app, rootPid)
   return {
     app: record.app,
     round: record.round,

@@ -37,6 +37,7 @@ export { sleep }
 export class TreeTracker {
   readonly root: number
   private readonly names = new Map<number, string | null>()
+  readonly types: Record<string, string> = {}
 
   constructor(root: number) {
     this.root = root
@@ -45,6 +46,22 @@ export class TreeTracker {
 
   observe(sample: Sample): void {
     for (const proc of sample.procs) this.names.set(proc.pid, proc.name)
+  }
+
+  /** Reads the Chromium process type of every tracked pid not typed yet; a pid that already exited is left out. */
+  async refreshTypes(): Promise<void> {
+    const pending = this.pids.filter((pid) => !(pid in this.types))
+    if (pending.length === 0) return
+    const child = Bun.spawn(["ps", "-p", pending.join(","), "-o", "pid=,args="], { stdout: "pipe", stderr: "ignore" })
+    const stdout = await new Response(child.stdout).text()
+    await child.exited
+    for (const line of stdout.split("\n")) {
+      const match = /^\s*(\d+)\s+(.*)$/.exec(line)
+      if (!match) continue
+      const type = /--type=(\S+)/.exec(match[2])
+      const subType = /--utility-sub-type=(\S+)/.exec(match[2])
+      this.types[match[1]] = type ? (subType ? `${type[1]}:${subType[1]}` : type[1]) : "browser"
+    }
   }
 
   get pids(): number[] {

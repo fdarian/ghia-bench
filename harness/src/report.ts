@@ -35,12 +35,12 @@ function digitsFor(value: number): number {
 }
 
 function num(value: number): string {
-  return value.toFixed(digitsFor(value))
+  return Number.isInteger(value) ? value.toFixed(0) : value.toFixed(digitsFor(value))
 }
 
 function medianRange(summary: Summary | null): string {
   if (!summary) return "–"
-  if (summary.n === 1) return num(summary.median)
+  if (summary.min === summary.max) return num(summary.median)
   return `${num(summary.median)} [${num(summary.min)}–${num(summary.max)}]`
 }
 
@@ -189,7 +189,7 @@ function summaryRows(env: Env, data: AppData[]): Row[] {
   const cells = (make: (app: AppData) => string) => data.map(make)
   rows.push({ heading: "Samples" })
   rows.push({ label: "Startup launches kept", cells: cells((app) => `${app.launches.length}${app.startupFromSessions ? " (from sessions)" : ""}`) })
-  rows.push({ label: "Sessions (frame metrics valid / total)", cells: cells((app) => `${app.frameSessions.length} / ${app.sessions.length}`) })
+  rows.push({ label: "Sessions (window active and uncovered / total)", cells: cells((app) => `${app.frameSessions.length} / ${app.sessions.length}`) })
 
   rows.push({ heading: "Startup" })
   rows.push({ label: "Window visible (ms)", cells: cells((app) => medianRangeOf(present(app.launches.map((launch) => launch.windowVisibleMs)))) })
@@ -280,7 +280,7 @@ function renderElectronBreakdown(data: AppData[]): string | null {
   return table(
     ["Process group", "Footprint after idle (MiB)", "Footprint after workload (MiB)", ...phases.map((name) => `CPU % ${name}`)],
     rows,
-  ) + "\n\nMedian [min–max] across sessions. Groups come from the process name: main = the root pid, renderer / GPU = the matching Helper, network/utility = the plain `Helper`, other = anything else. A group that did not exist in a session is left out of that median; footprints are `phys_footprint`, which can double-count shared pages across processes."
+  ) + "\n\nMedian [min–max] across sessions. Groups: main = the root pid; renderer, GPU and network come from the Chromium `--type` on the process command line (a plain `Helper` runs both GPU and network), other = any other utility or unclassified process. A group that did not exist in a session is left out of that median; footprints are `phys_footprint`, which can double-count shared pages across processes."
 }
 
 function bulletList(items: string[]): string {

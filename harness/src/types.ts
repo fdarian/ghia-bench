@@ -110,6 +110,8 @@ export type SessionRecord = {
   window: WindowStatus | null
   phases: Record<PhaseName, PhaseRecord>
   finalSample: Sample | null
+  /** pid -> Chromium process type from the command line (`renderer`, `gpu-process`, `utility:<sub-type>`, `browser`). Electron only. */
+  processTypes: Record<string, string>
   quit: QuitResult | null
   errors: StepError[]
 }

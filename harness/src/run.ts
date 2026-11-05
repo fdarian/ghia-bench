@@ -144,6 +144,7 @@ async function runPhase(
     tracker.observe(result.data.rusageBefore)
     tracker.observe(result.data.rusageAfter)
     tracker.observe(result.data.rusageAfterTail)
+    await tracker.refreshTypes()
     const record: PhaseRecord = { status: "ok", data: result.data }
     if (result.stderr !== "") record.helperStderr = result.stderr
     return record
@@ -167,6 +168,7 @@ async function session(
   let window: WindowStatus | null = null
   let finalSample: Sample | null = null
   let quitResult: QuitResult | null = null
+  let processTypes: Record<string, string> = {}
 
   const launch = await step(errors, "launch", () => launchApp(app, capture))
   if (launch) {
@@ -182,11 +184,13 @@ async function session(
     await sleep(2000)
     finalSample = await step(errors, "final sample", () => sample(launch.pid))
     if (finalSample) tracker.observe(finalSample)
+    await step(errors, "process types", () => tracker.refreshTypes())
+    processTypes = tracker.types
     quitResult = await quit(tracker, errors)
   }
   const record: SessionRecord = {
     type: "session", app, round, startedAt, loadBefore, loadAfter: currentLoadAverage(),
-    launch, window, phases, finalSample, quit: quitResult, errors,
+    launch, window, phases, finalSample, processTypes, quit: quitResult, errors,
   }
   appendRecord(out, record)
   const states = (Object.keys(phases) as PhaseName[]).map((name) => `${name}:${phases[name].status}`).join(" ")

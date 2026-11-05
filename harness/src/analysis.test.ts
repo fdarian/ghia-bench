@@ -107,7 +107,7 @@ describe("diffUsage", () => {
       proc(1, { name: "Mailbox-Electron", userNs: 30 * MS }),
       proc(2, { name: "Mailbox-Electron Helper (Rendere", userNs: 100 * MS }),
     ])
-    const groups = diffUsageByGroup(before, after, (p) => electronGroupOf(p.name, p.pid === 1))
+    const groups = diffUsageByGroup(before, after, (p) => electronGroupOf(p.name, p.pid === 1, null))
     expect(groups.main.cpuMs).toBeCloseTo(20)
     expect(groups.renderer.cpuMs).toBeCloseTo(100)
     expect(footprintByGroup(sample(0, [proc(1, { footprint: 5 }), proc(2, { footprint: 7 })]), (p) => (p.pid === 1 ? "a" : "b")))
@@ -120,14 +120,15 @@ describe("diffUsage", () => {
 })
 
 describe("electronGroupOf", () => {
-  test("classifies by process name, tolerating proc_name truncation", () => {
-    expect(electronGroupOf("Mailbox-Electron", true)).toBe("main")
-    expect(electronGroupOf("Mailbox-Electron Helper (Rendere", false)).toBe("renderer")
-    expect(electronGroupOf("Mailbox-Electron Helper (Renderer)", false)).toBe("renderer")
-    expect(electronGroupOf("Mailbox-Electron Helper (GPU)", false)).toBe("gpu")
-    expect(electronGroupOf("Mailbox-Electron Helper", false)).toBe("network/utility")
-    expect(electronGroupOf("chrome_crashpad_handler", false)).toBe("other")
-    expect(electronGroupOf(null, false)).toBe("other")
+  test("uses the Chromium process type, falling back to the truncated name only for renderers", () => {
+    expect(electronGroupOf("Mailbox-Electron", true, "browser")).toBe("main")
+    expect(electronGroupOf("Mailbox-Electron Helper", false, "gpu-process")).toBe("gpu")
+    expect(electronGroupOf("Mailbox-Electron Helper", false, "utility:network.mojom.NetworkService")).toBe("network")
+    expect(electronGroupOf("Mailbox-Electron Helper", false, "utility:audio.mojom.AudioService")).toBe("other")
+    expect(electronGroupOf("Mailbox-Electron Helper (Rendere", false, "renderer")).toBe("renderer")
+    expect(electronGroupOf("Mailbox-Electron Helper (Rendere", false, null)).toBe("renderer")
+    expect(electronGroupOf("Mailbox-Electron Helper", false, null)).toBe("other")
+    expect(electronGroupOf(null, false, null)).toBe("other")
   })
 })
 
