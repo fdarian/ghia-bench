@@ -67,23 +67,30 @@ describe("environmentLine", () => {
 })
 
 describe("renderResultsTable", () => {
-  test("header, alignment, section rows and every row of a measured section with pipes escaped", () => {
-    expect(renderResultsTable(metrics.slice(0, 2).concat([
+  test("header, alignment, section rows and the data rows with pipes escaped", () => {
+    expect(renderResultsTable([
+      metric("w", "Startup", "Window visible (ms)", ["523 [458–706]", "541 [454–660]"]),
       metric("a", "Startup", "App frames | changed", ["1", "2"]),
-    ]))).toBe([
+    ])).toBe([
       "| Metric | Electron | Ghia |",
       "| --- | ---: | ---: |",
       "| **Startup** |  |  |",
       "| Window visible (ms) | 523 [458–706] | 541 [454–660] |",
-      "| Content ready (ms) | – | – |",
       "| App frames \\| changed | 1 | 2 |",
     ].join("\n"))
   })
 
-  test("a section with no data keeps its heading, marked, without rows", () => {
+  test("drops rows where every app is a dash and sections left with no rows", () => {
     const table = renderResultsTable(metrics)
-    expect(table).toContain("| **Scroll (3 s down)** (not measured) |  |  |")
+    expect(table).toContain("| Window visible (ms) |")
+    expect(table).not.toContain("Content ready")
+    expect(table).not.toContain("Scroll")
     expect(table).not.toContain("App frame rate")
+  })
+
+  test("keeps a row that has data for only some apps, dash included", () => {
+    const table = renderResultsTable([metric("k", "S", "L", ["7", "–"])])
+    expect(table).toContain("| L | 7 | – |")
   })
 
   test("columns are the apps in the rows, in app order", () => {
@@ -93,17 +100,21 @@ describe("renderResultsTable", () => {
 })
 
 describe("missingRowsSentence", () => {
-  test("names the unmeasured sections and the all-dash rows of measured ones", () => {
-    const sentence = missingRowsSentence(env, metrics)!
-    expect(sentence).toContain("--capture off")
-    expect(sentence).toBe(
-      'Frame capture was off (--capture off), so 1 row without data (shown as "–") in Startup and 1 section not measured (Scroll): '
-      + "they come from the frames of the app window, which need Screen Recording.",
+  test("names the rows left out, without units, once each, and the reason", () => {
+    expect(missingRowsSentence(env, metrics)).toBe(
+      "Left out because they have no data in this run: Content ready, App frame rate, App frames | changed. "
+      + "They need Screen Recording to capture frames of the app window; this run had capture off (--capture off). See the full report.",
     )
   })
 
-  test("none when capture was on", () => {
-    expect(missingRowsSentence({ ...env, capture: { enabled: true, reason: "on" } }, metrics)).toBeNull()
+  test("with capture on it does not blame capture", () => {
+    const sentence = missingRowsSentence({ ...env, capture: { enabled: true, reason: "on" } }, metrics)!
+    expect(sentence).not.toContain("Screen Recording")
+    expect(sentence).toContain("Content ready")
+  })
+
+  test("none when every row has data", () => {
+    expect(missingRowsSentence(env, [metric("k", "S", "L", ["1", "2"])])).toBeNull()
   })
 })
 

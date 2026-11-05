@@ -88,22 +88,8 @@ function captureInputLine(env: Env): string {
   return `Frame capture: ${env.capture.enabled ? "on" : "off"} (${env.capture.reason}). Input: ${env.input.enabled ? "on" : "off"} (${env.input.reason}).`
 }
 
-type TableSection = { heading: string; rows: SummaryMetric[]; measured: boolean }
-
-function sectionsOf(metrics: SummaryMetric[], apps: AppId[]): TableSection[] {
-  const sections: TableSection[] = []
-  for (const metric of metrics) {
-    let section = sections[sections.length - 1]
-    if (!section || section.heading !== metric.section) {
-      section = { heading: metric.section, rows: [], measured: false }
-      sections.push(section)
-    }
-    section.rows.push(metric)
-  }
-  for (const section of sections) {
-    section.measured = section.rows.some((row) => apps.some((app) => cellText(row, app) !== NOT_MEASURED))
-  }
-  return sections
+function hasData(metric: SummaryMetric, apps: AppId[]): boolean {
+  return apps.some((app) => cellText(metric, app) !== NOT_MEASURED)
 }
 
 function cellText(metric: SummaryMetric, app: AppId): string {
@@ -117,40 +103,30 @@ function appsOf(metrics: SummaryMetric[]): AppId[] {
   return APP_IDS.filter((app) => app in metrics[0].cells)
 }
 
-/** The summary table of report.md: every row of every measured section; a section with no data keeps its heading, marked, like the report does. */
+/** The summary table of report.md without the rows that have no data for any app, and the sections left empty by that. */
 export function renderResultsTable(metrics: SummaryMetric[]): string {
   const apps = appsOf(metrics)
   const lines = [`| Metric | ${apps.map((app) => APP_LABELS[app]).join(" | ")} |`, `| --- | ${apps.map(() => "---:").join(" | ")} |`]
-  for (const section of sectionsOf(metrics, apps)) {
-    lines.push(`| **${section.heading}**${section.measured ? "" : " (not measured)"} | ${apps.map(() => "").join(" | ")} |`)
-    if (!section.measured) continue
-    for (const row of section.rows) lines.push(`| ${escapeCell(row.label)} | ${apps.map((app) => escapeCell(cellText(row, app))).join(" | ")} |`)
+  let section: string | null = null
+  for (const row of metrics) {
+    if (!hasData(row, apps)) continue
+    if (row.section !== section) {
+      section = row.section
+      lines.push(`| **${section}** | ${apps.map(() => "").join(" | ")} |`)
+    }
+    lines.push(`| ${escapeCell(row.label)} | ${apps.map((app) => escapeCell(cellText(row, app))).join(" | ")} |`)
   }
   return lines.join("\n")
 }
 
-function plural(count: number, noun: string): string {
-  return `${count} ${noun}${count === 1 ? "" : "s"}`
-}
-
-/** Which rows have no numbers and why; only a run without frame capture has any. */
+/** Names what the table leaves out (rows with no data for any app) and why; null when nothing was left out. */
 export function missingRowsSentence(env: Env, metrics: SummaryMetric[]): string | null {
-  if (env.capture.enabled) return null
   const apps = appsOf(metrics)
-  const sections = sectionsOf(metrics, apps)
-  const skipped = sections.filter((section) => !section.measured).map((section) => section.heading)
-  const dashed = sections
-    .filter((section) => section.measured)
-    .map((section) => ({ heading: section.heading, rows: section.rows.filter((row) => apps.every((app) => cellText(row, app) === NOT_MEASURED)) }))
-    .filter((section) => section.rows.length > 0)
-  const parts: string[] = []
-  if (dashed.length > 0) {
-    const count = dashed.reduce((total, section) => total + section.rows.length, 0)
-    parts.push(`${plural(count, "row")} without data (shown as "${NOT_MEASURED}") in ${dashed.map((section) => section.heading.replace(/ \(.*/, "")).join(", ")}`)
-  }
-  if (skipped.length > 0) parts.push(`${plural(skipped.length, "section")} not measured (${skipped.map((heading) => heading.replace(/ \(.*/, "")).join(", ")})`)
-  if (parts.length === 0) return null
-  return `Frame capture was off (${env.capture.reason}), so ${parts.join(" and ")}: they come from the frames of the app window, which need Screen Recording.`
+  const labels = [...new Set(metrics.filter((row) => !hasData(row, apps)).map((row) => row.label.replace(/ \(.*/, "")))]
+  if (labels.length === 0) return null
+  const left = `Left out because they have no data in this run: ${labels.join(", ")}.`
+  if (env.capture.enabled) return `${left} See the full report.`
+  return `${left} They need Screen Recording to capture frames of the app window; this run had capture off (${env.capture.reason}). See the full report.`
 }
 
 export function buildResultsSection(env: Env, metrics: SummaryMetric[], reportLink: string): string {
