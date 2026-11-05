@@ -37,6 +37,7 @@ Bg #F4F4F5, 1px right border #E4E4E7.
 
 - "Mailbox" 15px semibold #18181B, row y 0-48, padding-left 16, vertically centered.
 - Folders from y 56: Inbox, Starred, Sent, Drafts, Archive, Spam, Trash. Each row 32 tall, inset 8px each side (so 204 wide), radius 6, padding-x 8; name 13px #27272A left; count 12px #71717A right (Inbox = unread count of all messages; others fixed: 24, 128, 3, 2048, 12, 0 shown as empty).
+  - Every number shown in the UI uses a thousands separator, folder counts included (Archive shows "2,048").
   - Inbox selected: bg #E4E4E7.
   - Hover on others: bg #EBEBED.
 - 16px gap, "LABELS" 11px semibold #A1A1AA, letter-spacing 0.5, row height 24, padding-left 16.
