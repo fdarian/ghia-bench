@@ -179,7 +179,7 @@ function Row(props: { message: Message; selected: boolean; onSelect: () => void 
 
 function Detail(props: { message: Message | undefined; scrollRef: (element: ScrollRef) => void }) {
   return (
-    <Scroll ref={props.scrollRef} contentStyle={{ flexGrow: 1, padding: 32 }} style={{ flexGrow: 1, minWidth: 0, height: "100%", backgroundColor: "#FFFFFF" }}>
+    <Scroll ref={props.scrollRef} contentStyle={{ flexGrow: 1, padding: 32 }} style={{ flex: 1, minWidth: 0, height: "100%", backgroundColor: "#FFFFFF" }}>
       <If
         when={props.message}
         else={
@@ -189,7 +189,7 @@ function Detail(props: { message: Message | undefined; scrollRef: (element: Scro
         }
       >
         {(message) => (
-          <View style={{ flexShrink: 0 }}>
+          <View>
             <Text style={{ fontSize: 22, lineHeight: 28, fontWeight: "600", color: "#18181B" }}>{message().subject}</Text>
             <View style={{ flexDirection: "row", alignItems: "flex-start", gap: 12, height: 40, marginTop: 16 }}>
               <Avatar name={message().fromName} size={40} fontSize={15} />
@@ -329,3 +329,4 @@ Window.setFrame({ origin: { x: 100, y: 100 }, size: { width: 1280, height: 800 +
 
 const messages = await loadMessages();
 mount(() => <App messages={messages} />);
+Window.orderFront();
