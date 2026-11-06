@@ -2,6 +2,7 @@
 export const APPS = [
   { id: "electron", label: "Electron", bundle: "Mailbox-Electron.app", multiProcess: true, chromium: true },
   { id: "ghia", label: "Ghia", bundle: "Mailbox-Ghia.app", multiProcess: false, chromium: false },
+  { id: "gpuix", label: "GPUIX", bundle: "Mailbox-GPUIX.app", multiProcess: false, chromium: false },
   { id: "gpui", label: "GPUI", bundle: "Mailbox-GPUI.app", multiProcess: false, chromium: false },
   { id: "swiftui", label: "SwiftUI", bundle: "Mailbox-SwiftUI.app", multiProcess: false, chromium: false },
   { id: "nsh", label: "NSH", bundle: "Mailbox-NSH.app", multiProcess: false, chromium: false },

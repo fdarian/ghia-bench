@@ -13,6 +13,10 @@ export const STAMPS: { [A in AppId]: BuildStamp<A> } = {
       dirty: false, source: "https://github.com/fdarian/ghia.git",
     },
   },
+  gpuix: {
+    app: "gpuix", builtAt: "2026-11-06T01:01:30.000Z", bench: { sha: "aaaaaaa1111111111111111111111111111111aa", dirty: false },
+    versions: { solid: "0.11.0", native: "0.11.0", addon: "0.11.0", source: "npm" },
+  },
   gpui: {
     app: "gpui", builtAt: "2026-11-06T01:02:00.000Z", bench: { sha: "aaaaaaa1111111111111111111111111111111aa", dirty: false },
     versions: { git: "https://github.com/zed-industries/zed", commit: "654efae441bc8eb117d0042bb28cd7cf3570bdc9", rustc: "rustc 1.97.1 (abcdef 2026-09-01)" },

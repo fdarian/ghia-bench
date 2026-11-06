@@ -360,6 +360,11 @@ function ghiaLine(stamp: BuildStamp<"ghia">): string {
   return `Ghia ${v.sha}${v.dirty ? " (tree had uncommitted changes)" : ""}, zed ${v.zedSha}, @ghia/native ${v.native}, @ghia/solid ${v.solid}, from ${v.source}.`
 }
 
+function gpuixLine(stamp: BuildStamp<"gpuix">): string {
+  const v = stamp.versions
+  return `GPUIX @gpuix/solid ${v.solid}, @gpuix/native ${v.native}, @gpuix/native-darwin-arm64 ${v.addon}, from ${v.source}.`
+}
+
 function gpuiLine(stamp: BuildStamp<"gpui">): string {
   return `GPUI app: upstream gpui from ${stamp.versions.git} at ${stamp.versions.commit}, ${stamp.versions.rustc}.`
 }
@@ -394,6 +399,7 @@ export function renderEnvironment(env: Env): string {
     `Main display ${env.display.widthPt} x ${env.display.heightPt} pt, scale ${env.display.scale}, ${env.display.refreshHz} Hz.`,
     `Load average (1/5/15 min) at start: ${env.loadAverage.map((value) => value.toFixed(2)).join(" / ")}.`,
     ...(env.args.apps.includes("ghia") ? [ghiaLine(buildOf(env, "ghia"))] : []),
+    ...(env.args.apps.includes("gpuix") ? [gpuixLine(buildOf(env, "gpuix"))] : []),
     ...(env.args.apps.includes("gpui") ? [gpuiLine(buildOf(env, "gpui"))] : []),
     ...(env.args.apps.includes("electron") ? [electronLine(buildOf(env, "electron"))] : []),
     ...(env.args.apps.includes("mygo") ? [mygoLine(buildOf(env, "mygo"))] : []),

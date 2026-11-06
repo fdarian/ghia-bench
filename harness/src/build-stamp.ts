@@ -91,6 +91,16 @@ async function ghiaVersions(): Promise<StampVersions["ghia"]> {
   }
 }
 
+async function gpuixVersions(): Promise<StampVersions["gpuix"]> {
+  const modules = join(REPO_ROOT, "apps", "gpuix", "node_modules", "@gpuix")
+  return {
+    solid: packageVersion(join(modules, "solid", "package.json")),
+    native: packageVersion(join(modules, "native", "package.json")),
+    addon: packageVersion(join(modules, "native-darwin-arm64", "package.json")),
+    source: "npm",
+  }
+}
+
 async function gpuiVersions(): Promise<StampVersions["gpui"]> {
   const dir = join(REPO_ROOT, "apps", "gpui")
   return {
@@ -132,6 +142,7 @@ export async function stampBundle(app: AppId, bundle: string): Promise<BuildStam
   const common = { builtAt: new Date().toISOString(), bench: await gitState(REPO_ROOT) }
   switch (app) {
     case "ghia": return { app, ...common, versions: await ghiaVersions() }
+    case "gpuix": return { app, ...common, versions: await gpuixVersions() }
     case "gpui": return { app, ...common, versions: await gpuiVersions() }
     case "swiftui": return { app, ...common, versions: await swiftuiVersions() }
     case "nsh": return { app, ...common, versions: await nshVersions() }

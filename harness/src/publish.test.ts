@@ -52,6 +52,11 @@ describe("environmentLine", () => {
     expect(line).not.toContain("Swift")
   })
 
+  test("GPUIX appears with its @gpuix/solid version when it is in the run", () => {
+    const line = environmentLine({ ...env, args: { ...env.args, apps: ["ghia", "gpuix"] }, apps: appInfos(["ghia", "gpuix"]) })
+    expect(line).toContain("Ghia 8fcd806 (zed 451f7ec), GPUIX 0.11.0 (npm), Bun")
+  })
+
   test("NSH appears with its version, commit and source when it is in the run", () => {
     const line = environmentLine({ ...env, args: { ...env.args, apps: ["ghia", "nsh"] }, apps: appInfos(["ghia", "nsh"]) })
     expect(line).toContain("Ghia 8fcd806 (zed 451f7ec), NSH 0.4.0 (e626a8d, homebrew), Bun")

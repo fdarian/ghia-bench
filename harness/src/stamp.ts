@@ -6,6 +6,7 @@ export const STAMP_FILE = "bench-build.json"
 
 export type StampVersions = {
   ghia: { native: string; solid: string; sha: string; zedSha: string; dirty: boolean; source: string }
+  gpuix: { solid: string; native: string; addon: string; source: string }
   gpui: { git: string; commit: string; rustc: string }
   swiftui: { swift: string; xcode: string; xcodeBuild: string; sdk: string }
   nsh: { nsh: string; commit: string; source: string }
@@ -25,6 +26,7 @@ export type BuildStamp<A extends AppId = AppId> = {
 
 const FIELD_TYPES: { [A in AppId]: Record<keyof StampVersions[A], "string" | "boolean"> } = {
   ghia: { native: "string", solid: "string", sha: "string", zedSha: "string", dirty: "boolean", source: "string" },
+  gpuix: { solid: "string", native: "string", addon: "string", source: "string" },
   gpui: { git: "string", commit: "string", rustc: "string" },
   swiftui: { swift: "string", xcode: "string", xcodeBuild: "string", sdk: "string" },
   nsh: { nsh: "string", commit: "string", source: "string" },
