@@ -29,3 +29,7 @@ pnpm exec electron-packager "$stage" Mailbox-Electron \
 mv "$dist/Mailbox-Electron-darwin-arm64/Mailbox-Electron.app" "$dist/Mailbox-Electron.app"
 rm -rf "$dist/Mailbox-Electron-darwin-arm64"
 rm -rf "$stage"
+
+# The stamp goes into Resources, which the signature covers: sign again after it.
+bun "$repo_root/harness/src/build-stamp.ts" electron "$dist/Mailbox-Electron.app"
+codesign --force --deep --sign - "$dist/Mailbox-Electron.app"

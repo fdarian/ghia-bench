@@ -6,6 +6,7 @@ import {
   applyResultsSection, buildResultsSection, copyRun, environmentLine, missingRowsSentence, publishedName, renderResultsTable,
   RESULTS_END, RESULTS_START,
 } from "./publish"
+import { appInfos, STAMPS } from "./fixtures/stamps"
 import type { SummaryMetric } from "./report"
 import type { Env } from "./types"
 
@@ -18,11 +19,7 @@ const env: Env = {
   macos: "27.0.1 (26A434)", scrollBars: "WhenScrolling", chip: "Apple M1 Pro", memBytes: 2 ** 34,
   display: { id: 1, widthPt: 1512, heightPt: 982, scale: 2, refreshHz: 120 },
   loadAverage: [4.556640625, 5.55517578125, 5.28857421875], cpuCores: 10,
-  ghia: { sha: "8fcd806f5969c5eafc00ee1114ef7b66d8a2ca15", zedSha: "451f7ec4d15f7d7444a1f347d5b916e2a7989bab" },
-  electron: { electron: "45.2.2", chromium: "156.0.8078.80" }, bun: "1.4.4", rustc: "rustc 1.97.1",
-  mygo: { goVersion: "1.27.3", module: "github.com/egoist/mygo v0.7.5-0.20261105040656-977ea57e0baf" },
-  swift: { swift: "Apple Swift version 6.4.2 (swiftlang-6.4.2.1.9 clang-2100.4.1.1)", xcode: "Xcode 27.2, Build version 27B52" },
-  apps: {}, warnings: [],
+  bun: "1.4.4", apps: appInfos(["electron", "ghia", "gpui", "swiftui", "mygo"]), warnings: [],
 }
 
 function metric(key: string, section: string, label: string, texts: [string, string]): SummaryMetric {
@@ -44,25 +41,24 @@ describe("environmentLine", () => {
     const line = environmentLine(env)
     expect(line).toBe(
       "2026-11-05. Apple M1 Pro, 16 GiB RAM, macOS 27.0.1 (26A434), 1512 x 982 pt display at 120 Hz, scroll bars: when scrolling, load average 4.56 / 5.56 / 5.29. "
-      + "Ghia 8fcd806 (zed 451f7ec), Electron 45.2.2 (Chromium 156.0.8078.80), MyGo v0.7.5-0.20261105040656-977ea57e0baf, Swift 6.4.2, Xcode 27.2, Bun 1.4.4.",
+      + "Ghia 8fcd806 (zed 451f7ec), gpui 654efae, Electron 45.2.2 (Chromium 156.0.8078.80), MyGo v0.7.5-0.20261105040656-977ea57e0baf, Swift 6.4.2, Xcode 27.2, Bun 1.4.4.",
     )
   })
 
-  test("gpui source and commit appear when env.json has them, and versions of absent apps do not", () => {
-    const withGpui = { ...env, args: { ...env.args, apps: ["ghia", "gpui"] }, gpui: { source: "zed-industries/zed main", commit: "0123456789abcdef" } } as Env
-    const line = environmentLine(withGpui)
-    expect(line).toContain("gpui zed-industries/zed main @ 0123456")
+  test("versions of apps that were not in the run do not appear", () => {
+    const line = environmentLine({ ...env, args: { ...env.args, apps: ["ghia", "gpui"] } })
+    expect(line).toContain("gpui 654efae")
     expect(line).not.toContain("Electron")
     expect(line).not.toContain("Swift")
   })
 
-  test("a Ghia built from a package names that instead of a sha", () => {
-    expect(environmentLine({ ...env, ghiaSource: "npm @ghia/solid + @ghia/native 0.11.1" })).toContain("Ghia npm @ghia/solid + @ghia/native 0.11.1,")
+  test("a dirty Ghia tree is marked", () => {
+    const ghia = { ...env.apps.ghia!, build: { ...STAMPS.ghia, versions: { ...STAMPS.ghia.versions, dirty: true } } }
+    expect(environmentLine({ ...env, apps: { ...env.apps, ghia } })).toContain("Ghia 8fcd806+dirty (zed 451f7ec),")
   })
 
-  test("a missing version is an error, not a blank", () => {
-    expect(() => environmentLine({ ...env, electron: null })).toThrow("electron")
-    expect(() => environmentLine({ ...env, ghia: { sha: null, zedSha: null } })).toThrow("ghia.sha")
+  test("an app in the run with no recorded bundle is an error, not a blank", () => {
+    expect(() => environmentLine({ ...env, apps: {} })).toThrow("ghia")
   })
 })
 

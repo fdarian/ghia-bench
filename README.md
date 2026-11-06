@@ -79,7 +79,7 @@ The per-process breakdown and the validity notes are in [published/2026-11-05-no
   | MyGo | Go, MyGo's native `ui` package (pinned `977ea57`) | `ui.List` | `ui.TextInputBase` |
 
 - **Shipped builds.** All five run as release/production packaged `.app` bundles (Electron packaged with `--asar`, MyGo bundled by `go tool mygo build`), launched the way a user launches an app: `NSWorkspace.openApplication`, not by spawning the binary.
-- **Upstream gpui, not Ghia's.** The GPUI app depends on upstream gpui the way a GPUI author does: a git dependency on `https://github.com/zed-industries/zed`, branch `main`, at the commit `apps/gpui/Cargo.lock` pins (recorded in `env.json` and the report's environment block; refresh with `cargo update -p gpui` in `apps/gpui`, together with the channel in `apps/gpui/rust-toolchain.toml`, which follows upstream's). It uses no `[patch]`, and `gpui_platform` with the `font-kit` feature opens the window. Ghia is built on its own fork of gpui (`fdarian/zed`, pinned by `scripts/setup-ghia.sh`), so GPUI vs Ghia differs by both the fork's patches and Ghia's layer on top; it is not a pure framework-overhead comparison.
+- **Upstream gpui, not Ghia's.** The GPUI app depends on upstream gpui the way a GPUI author does: a git dependency on `https://github.com/zed-industries/zed`, branch `main`, at the commit `apps/gpui/Cargo.lock` pins (recorded in the GPUI build stamp, so in `env.json` and the report's environment block; refresh with `cargo update -p gpui` in `apps/gpui`, together with the channel in `apps/gpui/rust-toolchain.toml`, which follows upstream's). It uses no `[patch]`, and `gpui_platform` with the `font-kit` feature opens the window. Ghia is built on its own fork of gpui (`fdarian/zed`, pinned by `scripts/setup-ghia.sh`), so GPUI vs Ghia differs by both the fork's patches and Ghia's layer on top; it is not a pure framework-overhead comparison.
 - **Measured externally and identically.** One harness, the same phases, the same input events and the same analysis for every app.
 - **Rotated run order.** App order rotates every launch and round so drift in machine state does not favour one app.
 
@@ -115,6 +115,7 @@ From a fresh clone this builds the pinned Ghia (`scripts/setup-ghia.sh`), genera
 - The harness has no dependencies to install.
 - Optional env vars: `GHIA_SRC=/path/to/ghia` (local Ghia checkout, see above) and `GHIA_HEAVY=<wrapper>`, a command such as a lock script that the Ghia native build and the GPUI and MyGo builds are run through (`$GHIA_HEAVY cargo build --release`). Without it, or if it is not executable, they run directly. `setup-ghia.sh`, `apps/gpui/build.sh` and `apps/mygo/build.sh` honour both as applicable.
 - A missing bundle is skipped by the harness unless you name it in `--apps`.
+- Every build script ends by writing `Contents/Resources/bench-build.json` into its bundle (`harness/src/build-stamp.ts`, before the bundle is code-signed): the versions it was built from (Ghia: `@ghia/native` and `@ghia/solid` versions, Ghia and zed SHAs, whether the Ghia tree had uncommitted changes, where it was cloned from; GPUI: gpui commit and rustc; SwiftUI: Swift, Xcode and SDK; MyGo: Go and MyGo; Electron: Electron and Chromium), this repo's commit and the build time. `run` reads the stamps from the bundles it launches and stops if one is missing or unreadable (rebuild that app), so a bundle built on another machine records what it was built from, not what this checkout holds.
 
 </details>
 
@@ -148,7 +149,7 @@ bun test harness/src
 
 ### Output (`results/<timestamp>/`, gitignored)
 
-- `env.json`: the permission probe, macOS, chip, RAM, display and refresh rate, load average, Ghia and zed SHAs, Electron and Chromium versions, Bun and rustc versions, bundle sizes (`du -sk`) and executable sizes, the run arguments, what capture and input were enabled and why, and any warnings.
+- `env.json`: the permission probe, macOS, chip, RAM, display and refresh rate, load average, Bun version, each app's build stamp (below), bundle sizes (`du -sk`) and executable sizes, the run arguments, what capture and input were enabled and why, and any warnings.
 - `runs.jsonl`: one JSON line per launch or session, appended as it finishes. Everything the helper printed is kept raw (mach-ns timestamps, rusage samples per process, every input, every captured frame with the regions that changed), plus load average before and after, the window check (`appActive`, `coveredFraction`, `coveredBy`), per-phase status (`ok`, `skipped` with the reason, or `error`) and how the app quit. All metrics are derived from it at report time, so analysis changes never need a re-run.
 - `report.md`: environment, one summary table (median [min-max] per app; latency and interval cells pool all keys or frames), the Electron per-process memory and CPU breakdown, and a Validity section listing every skipped phase, invalid session, capture error and the reason.
 
@@ -164,7 +165,7 @@ Analysis lives in `harness/src/analysis.ts` (pure functions, unit-tested with sy
 - **MyGo's high wakeup counts come from its runtime**, not from app code: Go callbacks on the pinned main thread and handoffs with its Metal presenter thread.
 - **MyGo's scrollbar shows only while the pointer is over a scroll area** (its default), so keyboard scrolling shows none.
 - **Scrollbar style follows System Settings > "Show scroll bars"** for Electron, Ghia and SwiftUI; `env.json` records the setting.
-- **Results are machine-specific.** `env.json` records the chip, RAM, display, refresh rate, load average, and the Ghia, zed, Electron/Chromium, Bun and rustc versions. Compare runs only within one machine and one display setup.
+- **Results are machine-specific.** `env.json` records the chip, RAM, display, refresh rate, load average, and the versions each bundle was built from. Compare runs only within one machine and one display setup.
 - **The apps are not pixel-identical.** The known differences (Electron's async data fetch before first paint, missing `letter-spacing` in Ghia and GPUI, Ghia's windowed `<virtual-list>`, GPUI's chosen line heights, SwiftUI's line-height emulation, MyGo's caret blink period) are listed under "Parity notes" in [SPEC.md](./SPEC.md).
 
 ## Layout

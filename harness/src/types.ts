@@ -1,4 +1,5 @@
 import type { AppId } from "./apps"
+import type { BuildStamp } from "./stamp"
 export { APP_IDS, APP_LABELS } from "./apps"
 export type { AppId } from "./apps"
 
@@ -140,6 +141,8 @@ export type AppInfo = {
   executable: string
   executableBytes: number
   largeExecutables: { path: string; bytes: number }[]
+  /** Read from the bundle's bench-build.json at run time. */
+  build: BuildStamp
 }
 
 export type Env = {
@@ -156,17 +159,7 @@ export type Env = {
   display: Probe["mainDisplay"]
   loadAverage: number[]
   cpuCores: number
-  ghia: { sha: string | null; zedSha: string | null }
-  /** What the Ghia bundle was built from when it is not vendor/ghia (a history record), e.g. "npm @ghia/solid + @ghia/native 0.11.0". */
-  ghiaSource?: string
-  electron: { electron: string; chromium: string } | null
   bun: string
-  rustc: string | null
-  /** The gpui the GPUI app was built against, from apps/gpui/Cargo.lock; null when the GPUI app is not in the run. */
-  gpui?: { git: string; commit: string } | null
-  /** `go` line of apps/mygo/go.mod and the egoist/mygo requirement. */
-  mygo?: { goVersion: string | null; module: string | null } | null
-  swift?: { swift: string | null; xcode: string | null } | null
   apps: Partial<Record<AppId, AppInfo>>
   warnings: string[]
 }

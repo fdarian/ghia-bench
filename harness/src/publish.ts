@@ -1,6 +1,7 @@
 import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
 import { REPO_ROOT } from "./helper"
+import { buildOf, type BuildStamp } from "./stamp"
 import { readEnv, readRuns, summaryMetrics, type SummaryMetric } from "./report"
 import { APP_IDS, APP_LABELS, type AppId, type Env } from "./types"
 
@@ -24,19 +25,9 @@ const SCROLL_BARS: Record<string, string> = {
   unset: "automatic (unset)",
 }
 
-/** `gpui` is recorded by newer harness versions as a string or `{ source, commit }`; older env.json files have none. */
-function gpuiVersion(env: Env): string | null {
-  const gpui = (env as unknown as { gpui?: string | { source?: string | null; commit?: string | null } | null }).gpui
-  if (gpui === undefined || gpui === null) return null
-  if (typeof gpui === "string") return gpui
-  const parts = [gpui.source, gpui.commit ? gpui.commit.slice(0, 7) : null].filter((part): part is string => !!part)
-  return parts.length > 0 ? parts.join(" @ ") : null
-}
-
-function ghiaVersion(env: Env): string {
-  if (env.ghiaSource) return env.ghiaSource
-  const sha = required("ghia.sha", env.ghia.sha).slice(0, 7)
-  return env.ghia.zedSha ? `${sha} (zed ${env.ghia.zedSha.slice(0, 7)})` : sha
+function ghiaVersion(stamp: BuildStamp<"ghia">): string {
+  const v = stamp.versions
+  return `${v.sha.slice(0, 7)}${v.dirty ? "+dirty" : ""} (zed ${v.zedSha.slice(0, 7)})`
 }
 
 export function runDate(env: Env): string {
@@ -64,21 +55,16 @@ export function environmentLine(env: Env): string {
     `load average ${env.loadAverage.map((value) => value.toFixed(2)).join(" / ")}`,
   ]
   const versions: string[] = []
-  if (apps.includes("ghia")) versions.push(`Ghia ${ghiaVersion(env)}`)
-  const gpui = apps.includes("gpui") ? gpuiVersion(env) : null
-  if (gpui) versions.push(`gpui ${gpui}`)
+  if (apps.includes("ghia")) versions.push(`Ghia ${ghiaVersion(buildOf(env, "ghia"))}`)
+  if (apps.includes("gpui")) versions.push(`gpui ${buildOf(env, "gpui").versions.commit.slice(0, 7)}`)
   if (apps.includes("electron")) {
-    const electron = required("electron versions", env.electron)
+    const electron = buildOf(env, "electron").versions
     versions.push(`Electron ${electron.electron} (Chromium ${electron.chromium})`)
   }
-  if (apps.includes("mygo")) {
-    const mygo = required("mygo module", required("mygo", env.mygo).module)
-    versions.push(`MyGo ${mygo.replace(/^\S+\s+/, "")}`)
-  }
+  if (apps.includes("mygo")) versions.push(`MyGo ${buildOf(env, "mygo").versions.mygo}`)
   if (apps.includes("swiftui")) {
-    const swift = required("swift", env.swift)
-    versions.push(`Swift ${/version (\S+)/.exec(required("swift version", swift.swift))?.[1] ?? swift.swift}`)
-    versions.push(/^Xcode [\d.]+/.exec(required("xcode version", swift.xcode))?.[0] ?? swift.xcode!)
+    const swift = buildOf(env, "swiftui").versions
+    versions.push(`Swift ${swift.swift}`, `Xcode ${swift.xcode}`)
   }
   versions.push(`Bun ${env.bun}`)
   return `${runDate(env)}. ${machine.join(", ")}. ${versions.join(", ")}.`

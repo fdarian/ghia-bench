@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test"
-import { buildReport, summaryMetrics } from "./report"
+import { buildReport, renderEnvironment, summaryMetrics } from "./report"
+import { appInfos } from "./fixtures/stamps"
 import type { Env, Frame, Input, PhaseOutput, Proc, Sample, SessionRecord, WindowStatus } from "./types"
 
 const MS = 1e6
@@ -30,8 +31,8 @@ const env: Env = {
   capture: { enabled: true, reason: "test" },
   input: { enabled: true, reason: "test" },
   probe: { screenCapture: true, postEvent: true, axTrusted: true, mainDisplay: { id: 1, widthPt: 1512, heightPt: 982, scale: 2, refreshHz: 120 }, osVersion: "1", cpu: "chip", memBytes: 2 ** 34 },
-  macos: "1", chip: "chip", memBytes: 2 ** 34, display: { id: 1, widthPt: 1512, heightPt: 982, scale: 2, refreshHz: 120 },
-  loadAverage: [1, 1, 1], cpuCores: 10, ghia: { sha: null, zedSha: null }, electron: null, bun: "1", rustc: null, apps: {}, warnings: [],
+  macos: "1", scrollBars: "WhenScrolling", chip: "chip", memBytes: 2 ** 34, display: { id: 1, widthPt: 1512, heightPt: 982, scale: 2, refreshHz: 120 },
+  loadAverage: [1, 1, 1], cpuCores: 10, bun: "1", apps: appInfos(["electron"]), warnings: [],
 }
 
 function windowStatus(appActive: boolean): WindowStatus {
@@ -69,6 +70,27 @@ function session(round: number, appActive: boolean): SessionRecord {
     errors: [],
   }
 }
+
+describe("renderEnvironment", () => {
+  const all = renderEnvironment({ ...env, args: { ...env.args, apps: ["electron", "ghia", "gpui", "swiftui", "mygo"] }, apps: appInfos(["electron", "ghia", "gpui", "swiftui", "mygo"]) })
+
+  test("each app's versions come from its stamp", () => {
+    expect(all).toContain("- Ghia 8fcd806f5969c5eafc00ee1114ef7b66d8a2ca15, zed 451f7ec4d15f7d7444a1f347d5b916e2a7989bab, @ghia/native 0.11.1, @ghia/solid 0.11.1, from https://github.com/fdarian/ghia.git.")
+    expect(all).toContain("- GPUI app: upstream gpui from https://github.com/zed-industries/zed at 654efae441bc8eb117d0042bb28cd7cf3570bdc9, rustc 1.97.1 (abcdef 2026-09-01).")
+    expect(all).toContain("- Electron 45.2.2, Chromium 156.0.8078.80.")
+    expect(all).toContain("- MyGo v0.7.5-0.20261105040656-977ea57e0baf, go 1.27.3.")
+    expect(all).toContain("- Swift 6.4.2; Xcode 27.2 (27B52); macOS SDK 27.0.")
+  })
+
+  test("names when and from which bench commit each bundle was built", () => {
+    expect(all).toContain("Electron 2026-11-06T01:00:00.000Z at bench aaaaaaa")
+    expect(all).toContain("MyGo 2026-11-06T01:04:00.000Z at bench aaaaaaa")
+  })
+
+  test("an app in the run with no recorded bundle is an error", () => {
+    expect(() => renderEnvironment({ ...env, apps: {} })).toThrow("electron")
+  })
+})
 
 describe("buildReport", () => {
   const records = [session(0, true), session(1, false)]

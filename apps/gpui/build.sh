@@ -34,5 +34,6 @@ cat > "$app/Contents/Info.plist" <<'PLIST'
 </dict>
 </plist>
 PLIST
+bun "$root/harness/src/build-stamp.ts" gpui "$app"
 codesign --force --sign - "$app"
 echo "$app"

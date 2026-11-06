@@ -1,6 +1,6 @@
 /**
  * Builds `<repo>/dist/Mailbox-Ghia.app`: one compiled Bun binary (Solid plugin, native addon
- * embedded) plus messages.json in Contents/Resources.
+ * embedded) plus messages.json in Contents/Resources. build.sh stamps and signs it.
  */
 import { cpSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
@@ -51,6 +51,3 @@ writeFileSync(
 </plist>
 `,
 )
-
-const sign = Bun.spawnSync(['codesign', '--force', '--sign', '-', app], { stderr: 'inherit' })
-if (sign.exitCode !== 0) throw new Error('codesign failed')

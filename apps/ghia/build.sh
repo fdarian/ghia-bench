@@ -10,5 +10,8 @@ repo_root="$(cd ../.. && pwd)"
 [ -f "$repo_root/vendor/ghia/packages/native/gpuix-native.darwin-arm64.node" ] \
   || { echo "vendor/ghia is not built: run scripts/setup-ghia.sh" >&2; exit 1; }
 bun install --frozen-lockfile
+app="$repo_root/dist/Mailbox-Ghia.app"
 NODE_ENV=production bun build.ts
-echo "$repo_root/dist/Mailbox-Ghia.app"
+bun "$repo_root/harness/src/build-stamp.ts" ghia "$app"
+codesign --force --sign - "$app"
+echo "$app"

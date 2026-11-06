@@ -1,8 +1,9 @@
-import { existsSync, lstatSync, readdirSync, readFileSync } from "node:fs"
+import { existsSync, lstatSync, readdirSync } from "node:fs"
 import { cpus, loadavg } from "node:os"
 import { join } from "node:path"
 import { REPO_ROOT } from "./helper"
 import { appSpec } from "./apps"
+import { readStamp } from "./stamp"
 import type { AppId, AppInfo, Env, Probe } from "./types"
 import { APP_IDS } from "./types"
 
@@ -48,6 +49,7 @@ function walkFiles(dir: string, visit: (path: string, bytes: number, mode: numbe
 
 export async function appInfo(app: AppId): Promise<AppInfo> {
   const path = bundlePath(app)
+  const build = readStamp(app, path)
   const executableName = await exec(["plutil", "-extract", "CFBundleExecutable", "raw", "-o", "-", join(path, "Contents", "Info.plist")])
   const executable = join(path, "Contents", "MacOS", executableName)
   const du = await exec(["du", "-sk", path])
@@ -65,38 +67,13 @@ export async function appInfo(app: AppId): Promise<AppInfo> {
     executable: executableName,
     executableBytes: lstatSync(executable).size,
     largeExecutables: large.slice(0, 8),
+    build,
   }
-}
-
-async function electronVersions(): Promise<{ electron: string; chromium: string }> {
-  const executable = join(bundlePath("electron"), "Contents", "MacOS", appSpec("electron").bundle.replace(".app", ""))
-  const out = await exec([executable, "-e", "console.log(JSON.stringify(process.versions))"], {
-    env: { ELECTRON_RUN_AS_NODE: "1" },
-  })
-  const versions = JSON.parse(out) as Record<string, string>
-  return { electron: versions.electron, chromium: versions.chrome }
-}
-
-/** `go` directive and the egoist/mygo requirement of apps/mygo/go.mod. */
-export function mygoModule(goMod: string): { goVersion: string | null; module: string | null } {
-  const goVersion = /^go\s+(\S+)/m.exec(goMod)
-  const module = /^\s*(?:require\s+)?(github\.com\/egoist\/mygo\S*)\s+(\S+)/m.exec(goMod)
-  return { goVersion: goVersion ? goVersion[1] : null, module: module ? `${module[1]} ${module[2]}` : null }
-}
-
-/** The git source and resolved commit of the `gpui` package in apps/gpui/Cargo.lock. */
-export function gpuiSource(cargoLock: string): { git: string; commit: string } {
-  const entry = cargoLock.split("[[package]]").find((block) => /^\s*name = "gpui"$/m.test(block))
-  if (!entry) throw new Error("no gpui package in Cargo.lock")
-  const source = /^source = "git\+([^?#"]+)(?:\?[^#"]*)?#([0-9a-f]{40})"$/m.exec(entry)
-  if (!source) throw new Error("gpui in Cargo.lock is not a git dependency with a resolved commit")
-  return { git: source[1], commit: source[2] }
 }
 
 export type EnvInputs = {
   startedAt: string
   args: Env["args"]
-  ghiaSource?: string
   probe: Probe
   capture: Env["capture"]
   input: Env["input"]
@@ -109,7 +86,7 @@ async function showScrollBars(): Promise<string> {
   return exitCode === 0 ? stdout.trim() : "unset"
 }
 
-/** Anything unavailable is recorded as null plus a warning; a benchmark run shouldn't die on a missing version string. */
+/** Machine fields that are unavailable are recorded as null plus a warning; the app versions come from the bundle stamps and are required. */
 export async function collectEnv(inputs: EnvInputs): Promise<Env> {
   const warnings: string[] = []
   async function attempt<T>(label: string, work: () => Promise<T>): Promise<T | null> {
@@ -124,32 +101,10 @@ export async function collectEnv(inputs: EnvInputs): Promise<Env> {
   const productVersion = await attempt("sw_vers", () => exec(["sw_vers", "-productVersion"]))
   const buildVersion = await attempt("sw_vers", () => exec(["sw_vers", "-buildVersion"]))
   const scrollBars = await attempt("AppleShowScrollBars", showScrollBars)
-  const ghiaDir = join(REPO_ROOT, "vendor", "ghia")
-  const vendored = inputs.ghiaSource === undefined
-  const ghiaSha = vendored ? await attempt("vendor/ghia SHA", () => exec(["git", "-C", ghiaDir, "rev-parse", "HEAD"])) : null
-  const zedSha = vendored ? await attempt("vendor/ghia/zed SHA", () => exec(["git", "-C", join(ghiaDir, "zed"), "rev-parse", "HEAD"])) : null
-  const electron = inputs.args.apps.includes("electron") ? await attempt("Electron version", electronVersions) : null
-  const rustc = await attempt("rustc --version", () => exec(["rustc", "--version"], { cwd: join(REPO_ROOT, "apps", "gpui") }))
 
-  const gpui = inputs.args.apps.includes("gpui")
-    ? await attempt("apps/gpui/Cargo.lock", async () => gpuiSource(readFileSync(join(REPO_ROOT, "apps", "gpui", "Cargo.lock"), "utf8")))
-    : null
-
-  const mygo = inputs.args.apps.includes("mygo")
-    ? await attempt("apps/mygo/go.mod", async () => mygoModule(readFileSync(join(REPO_ROOT, "apps", "mygo", "go.mod"), "utf8")))
-    : null
-  const swift = inputs.args.apps.includes("swiftui")
-    ? {
-      swift: await attempt("swift --version", async () => (await exec(["swift", "--version"])).split("\n")[0]),
-      xcode: await attempt("xcodebuild -version", async () => (await exec(["xcodebuild", "-version"])).split("\n").join(", ")),
-    }
-    : null
-
+  // Not in attempt(): an unstamped bundle must stop the run, not become a warning.
   const apps: Env["apps"] = {}
-  for (const app of inputs.args.apps) {
-    const info = await attempt(`${app} bundle info`, () => appInfo(app))
-    if (info) apps[app] = info
-  }
+  for (const app of inputs.args.apps) apps[app] = await appInfo(app)
 
   return {
     startedAt: inputs.startedAt,
@@ -164,14 +119,7 @@ export async function collectEnv(inputs: EnvInputs): Promise<Env> {
     display: inputs.probe.mainDisplay,
     loadAverage: currentLoadAverage(),
     cpuCores: cpus().length,
-    ghia: { sha: ghiaSha, zedSha },
-    ghiaSource: inputs.ghiaSource,
-    electron,
     bun: Bun.version,
-    rustc,
-    gpui,
-    mygo,
-    swift,
     apps,
     warnings,
   }

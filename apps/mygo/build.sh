@@ -19,4 +19,7 @@ fi
 rm -rf "$app"
 mkdir -p "$root/dist"
 cp -R "$here/build/darwin-arm64/Mailbox-MyGo.app" "$app"
+# The stamp goes into Resources, which the signature covers: sign again after it.
+bun "$root/harness/src/build-stamp.ts" mygo "$app"
+codesign --force --sign - "$app"
 echo "$app"

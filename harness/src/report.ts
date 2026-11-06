@@ -5,6 +5,7 @@ import {
   type LaunchAnalysis, type PhaseAnalysis, type SessionAnalysis, type Summary,
 } from "./analysis"
 import { appSpec } from "./apps"
+import { buildOf, type BuildStamp } from "./stamp"
 import type { AppId, Env, LaunchRecord, PhaseName, RunRecord, SessionRecord } from "./types"
 import { APP_IDS, APP_LABELS, INPUT_PHASES, PHASE_NAMES } from "./types"
 
@@ -354,21 +355,46 @@ function bulletList(items: string[]): string {
   return items.map((item) => `- ${item}`).join("\n")
 }
 
-function renderEnvironment(env: Env): string {
+function ghiaLine(stamp: BuildStamp<"ghia">): string {
+  const v = stamp.versions
+  return `Ghia ${v.sha}${v.dirty ? " (tree had uncommitted changes)" : ""}, zed ${v.zedSha}, @ghia/native ${v.native}, @ghia/solid ${v.solid}, from ${v.source}.`
+}
+
+function gpuiLine(stamp: BuildStamp<"gpui">): string {
+  return `GPUI app: upstream gpui from ${stamp.versions.git} at ${stamp.versions.commit}, ${stamp.versions.rustc}.`
+}
+
+function electronLine(stamp: BuildStamp<"electron">): string {
+  return `Electron ${stamp.versions.electron}, Chromium ${stamp.versions.chromium}.`
+}
+
+function mygoLine(stamp: BuildStamp<"mygo">): string {
+  return `MyGo ${stamp.versions.mygo}, go ${stamp.versions.go}.`
+}
+
+function swiftLine(stamp: BuildStamp<"swiftui">): string {
+  const v = stamp.versions
+  return `Swift ${v.swift}; Xcode ${v.xcode} (${v.xcodeBuild}); macOS SDK ${v.sdk}.`
+}
+
+function builtLine(stamp: BuildStamp): string {
+  return `${APP_LABELS[stamp.app]} ${stamp.builtAt} at bench ${stamp.bench.sha.slice(0, 7)}${stamp.bench.dirty ? " (dirty)" : ""}`
+}
+
+export function renderEnvironment(env: Env): string {
   const lines = [
     `Run started ${env.startedAt}; apps ${env.args.apps.join(", ")}; ${env.args.launches} startup launches and ${env.args.rounds} sessions per app.`,
     `macOS ${env.macos}, ${env.chip} (${env.cpuCores} cores), ${(env.memBytes / 2 ** 30).toFixed(0)} GiB RAM.`,
     `Scroll bars (System Settings): ${env.scrollBars ?? "unknown"}${env.scrollBars === "unset" ? " (Automatic)" : ""}.`,
     `Main display ${env.display.widthPt} x ${env.display.heightPt} pt, scale ${env.display.scale}, ${env.display.refreshHz} Hz.`,
     `Load average (1/5/15 min) at start: ${env.loadAverage.map((value) => value.toFixed(2)).join(" / ")}.`,
-    ...(env.args.apps.includes("ghia")
-      ? [env.ghiaSource ? `Ghia from ${env.ghiaSource}.` : `Ghia ${env.ghia.sha ?? "unknown"}, zed ${env.ghia.zedSha ?? "unknown"}.`]
-      : []),
-    ...(env.args.apps.includes("gpui") ? [`GPUI app: upstream gpui from ${env.gpui ? `${env.gpui.git} at ${env.gpui.commit}` : "unknown source"}.`] : []),
-    ...(env.args.apps.includes("electron") ? [`Electron ${env.electron ? `${env.electron.electron}, Chromium ${env.electron.chromium}` : "unknown"}.`] : []),
-    `Bun ${env.bun}, ${env.rustc ?? "rustc unknown"}.`,
-    ...(env.mygo ? [`MyGo ${env.mygo.module ?? "module unknown"}, go ${env.mygo.goVersion ?? "unknown"}.`] : []),
-    ...(env.swift ? [`Swift ${env.swift.swift ?? "unknown"}; Xcode ${env.swift.xcode ?? "unknown"}.`] : []),
+    ...(env.args.apps.includes("ghia") ? [ghiaLine(buildOf(env, "ghia"))] : []),
+    ...(env.args.apps.includes("gpui") ? [gpuiLine(buildOf(env, "gpui"))] : []),
+    ...(env.args.apps.includes("electron") ? [electronLine(buildOf(env, "electron"))] : []),
+    ...(env.args.apps.includes("mygo") ? [mygoLine(buildOf(env, "mygo"))] : []),
+    ...(env.args.apps.includes("swiftui") ? [swiftLine(buildOf(env, "swiftui"))] : []),
+    `Bun ${env.bun}.`,
+    `Bundles built (from the stamps in the bundles): ${env.args.apps.map((app) => builtLine(buildOf(env, app))).join("; ")}.`,
     `Frame capture: ${env.capture.enabled ? "on" : "off"} (${env.capture.reason}). Input: ${env.input.enabled ? "on" : "off"} (${env.input.reason}).`,
   ]
   for (const app of env.args.apps) {

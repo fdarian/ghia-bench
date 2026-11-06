@@ -214,7 +214,6 @@ export async function runBench(options: RunOptions): Promise<void> {
   if (existsSync(join(options.out, "runs.jsonl")) && readFileSync(join(options.out, "runs.jsonl"), "utf8").length > 0) {
     throw new Error(`${options.out}/runs.jsonl already has records; pick a new --out`)
   }
-  mkdirSync(options.out, { recursive: true })
   const env = await collectEnv({
     startedAt: new Date().toISOString(),
     args: { apps: options.apps, rounds: options.rounds, launches: options.launches, capture: options.capture, out: options.out },
@@ -222,6 +221,7 @@ export async function runBench(options: RunOptions): Promise<void> {
     capture,
     input,
   })
+  mkdirSync(options.out, { recursive: true })
   writeFileSync(join(options.out, "env.json"), JSON.stringify(env, null, 2) + "\n")
   writeFileSync(join(options.out, "runs.jsonl"), "")
 
