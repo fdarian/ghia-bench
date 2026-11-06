@@ -1,6 +1,6 @@
 # Mailbox app spec
 
-Contract that all five apps (Electron, Ghia, raw GPUI, SwiftUI, MyGo) implement. Apps contain no benchmark code; all measurement is external.
+Contract that all six apps (Electron, Ghia, Ghia compiled with Bun AOT, raw GPUI, SwiftUI, MyGo) implement. Apps contain no benchmark code; all measurement is external.
 
 Light theme only. System UI font (SF Pro) everywhere: CSS `system-ui`, gpui `.SystemUIFont`, Ghia default.
 
@@ -66,7 +66,7 @@ Bg #FFFFFF, 1px right border #E4E4E7.
   - Unread: 8px circle #2563EB centred at row (8, 21).
   - Avatar: 36px circle at (16, 12), bg = AVATAR[hash(fromName) % 8], initials (first letter of first two words) 13px semibold #FFFFFF centred.
     - AVATAR = #F87171 #FB923C #FBBF24 #34D399 #22D3EE #60A5FA #A78BFA #F472B6.
-    - hash = sum of UTF-16 code units of fromName (simple, identical in all five).
+    - hash = sum of UTF-16 code units of fromName (simple, identical in all six).
   - Text column from x 64 to row width - 16:
     - line 1 y 12-30: fromName 13px, semibold #18181B if unread else medium #3F3F46; time 12px #71717A right-aligned.
     - line 2 y 30-48: subject 13px #27272A, one line, ellipsis.
@@ -103,6 +103,7 @@ Both scroll areas (the list and the detail pane) show an overlay scrollbar on th
 - Electron: `fetch('./messages.json')` is async, so `ready-to-show` can fire before the list and detail are filled (a few ms later); the sidebar, search input and empty list column are painted first. `app.focus({ steal: true })` is requested per the spec, but macOS may still decline activation when the process is spawned from a background process (observed: another app stayed frontmost).
 - Ghia: `letter-spacing: 0.5` on "LABELS" is not applied: `letterSpacing` is not in Ghia's `StyleDesc` for HTML text (only SVG text has it), so the heading is drawn without tracking (a few px narrower).
 - Ghia: `<virtual-list>` runs in `itemCount` mode (documented windowing): 60 rows are mounted around `onVisibleRange.startIndex` (native builds viewport + 512 px overdraw, about 24 rows). `scrollToItem` top-aligns a row, so selection-into-view uses `scrollTo` against the fixed 72 px rows to get the SPEC's minimal scroll.
+- Ghia (bun AOT): the same source as Ghia, built by `apps/ghia/build-aot.sh` with `compile.aot` on a canary Bun; the stamp records that Bun's revision and `aot`. The Ghia stamp records its Bun revision too.
 - GPUI: `letter-spacing: 0.5` on "LABELS" is not applied: gpui's `TextStyle` has no letter spacing, so the heading is drawn without tracking.
 - GPUI: SPEC gives no line heights for the sender column, so the app uses 18 (13px lines), 16 (12px lines), 20/20 (sender name 14px / email 13px, column centred in the 40px row), and 16 (`dateLong`, top-aligned). Other apps should match these where they differ from their defaults.
 - MyGo: native UI (package `ui`, `ui.List` virtualized, `ui.TextInputBase`, `ListState.ScrollTo`/`ScrollIntoView`). The input's caret is MyGo's own: 1 DIP wide, blinks 530 ms on / 530 ms off (not 500/500), and is visible from every edit or caret move but starts blinking 530 ms later (no separate 500 ms solid hold); its colour is the theme accent, set to #18181B. The window theme is forced light.

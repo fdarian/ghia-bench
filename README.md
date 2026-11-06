@@ -1,6 +1,6 @@
 # ghia-bench
 
-One app, "Mailbox" (a 10,000-message mail client with a virtualized list, a live search filter and a detail pane), implemented five ways to one pixel spec: Electron, [Ghia](https://github.com/fdarian/ghia), raw GPUI, native SwiftUI and [MyGo](https://github.com/egoist/mygo) (its native `ui` package) ([SPEC.md](./SPEC.md)). An external harness launches the packaged builds and measures them identically; the apps carry no benchmark code.
+One app, "Mailbox" (a 10,000-message mail client with a virtualized list, a live search filter and a detail pane), implemented six ways to one pixel spec: Electron, [Ghia](https://github.com/fdarian/ghia), the same Ghia app compiled ahead of time by Bun (`bun build --compile --aot`), raw GPUI, native SwiftUI and [MyGo](https://github.com/egoist/mygo) (its native `ui` package) ([SPEC.md](./SPEC.md)). An external harness launches the packaged builds and measures them identically; the apps carry no benchmark code.
 
 ## Results
 
@@ -74,11 +74,12 @@ The per-process breakdown and the validity notes are in [published/2026-11-05-no
   | --- | --- | --- | --- |
   | Electron | Solid + Vite + CSS, default Electron settings | `@tanstack/solid-virtual` | DOM `<input>` |
   | Ghia | `@ghia/solid`, style objects | `<virtual-list>` | `<input>` |
+  | Ghia (bun AOT) | the Ghia app, unchanged, compiled to machine code by a Bun with `--aot` | `<virtual-list>` | `<input>` |
   | GPUI | Rust, upstream gpui (git, `zed-industries/zed` `main`), default features | `uniform_list` | a `TextInput` entity with `EntityInputHandler` |
   | SwiftUI | Swift 6, SwiftUI views, `@Observable` | `List` (NSTableView-backed, recycled rows) | `TextField` with `.onKeyPress` for ArrowUp/ArrowDown |
   | MyGo | Go, MyGo's native `ui` package (pinned `977ea57`) | `ui.List` | `ui.TextInputBase` |
 
-- **Shipped builds.** All five run as release/production packaged `.app` bundles (Electron packaged with `--asar`, MyGo bundled by `go tool mygo build`), launched the way a user launches an app: `NSWorkspace.openApplication`, not by spawning the binary.
+- **Shipped builds.** All six run as release/production packaged `.app` bundles (Electron packaged with `--asar`, MyGo bundled by `go tool mygo build`), launched the way a user launches an app: `NSWorkspace.openApplication`, not by spawning the binary.
 - **Upstream gpui, not Ghia's.** The GPUI app depends on upstream gpui the way a GPUI author does: a git dependency on `https://github.com/zed-industries/zed`, branch `main`, at the commit `apps/gpui/Cargo.lock` pins (recorded in the GPUI build stamp, so in `env.json` and the report's environment block; refresh with `cargo update -p gpui` in `apps/gpui`, together with the channel in `apps/gpui/rust-toolchain.toml`, which follows upstream's). It uses no `[patch]`, and `gpui_platform` with the `font-kit` feature opens the window. Ghia is built on its own fork of gpui (`fdarian/zed`, pinned by `scripts/setup-ghia.sh`), so GPUI vs Ghia differs by both the fork's patches and Ghia's layer on top; it is not a pure framework-overhead comparison.
 - **Measured externally and identically.** One harness, the same phases, the same input events and the same analysis for every app.
 - **Rotated run order.** App order rotates every launch and round so drift in machine state does not favour one app.
@@ -106,12 +107,12 @@ Prerequisites: macOS on Apple silicon, Xcode with the Metal toolchain (and Swift
 scripts/build-all.sh
 ```
 
-From a fresh clone this builds the pinned Ghia (`scripts/setup-ghia.sh`), generates `data/messages.json`, builds the measurement helper, then the five apps into `dist/Mailbox-Electron.app`, `dist/Mailbox-Ghia.app`, `dist/Mailbox-GPUI.app`, `dist/Mailbox-SwiftUI.app` and `dist/Mailbox-MyGo.app`, and prints their sizes. It takes a long time (a release gpui build, twice, plus the Swift and Go builds).
+From a fresh clone this builds the pinned Ghia (`scripts/setup-ghia.sh`), generates `data/messages.json`, builds the measurement helper, then the six apps into `dist/Mailbox-Electron.app`, `dist/Mailbox-Ghia.app`, `dist/Mailbox-GhiaAOT.app`, `dist/Mailbox-GPUI.app`, `dist/Mailbox-SwiftUI.app` and `dist/Mailbox-MyGo.app`, and prints their sizes. It takes a long time (a release gpui build, twice, plus the Swift and Go builds).
 
 <details>
 <summary>Build notes</summary>
 
-- Each step is also runnable alone: `scripts/setup-ghia.sh`, `bun run data`, `harness/helper/build.sh` (writes `harness/bin/benchhelper`), `apps/<electron|ghia|gpui|swiftui|mygo>/build.sh`. Each app script installs its own dependencies from its lockfile.
+- Each step is also runnable alone: `scripts/setup-ghia.sh`, `bun run data`, `harness/helper/build.sh` (writes `harness/bin/benchhelper`), `apps/<electron|ghia|gpui|swiftui|mygo>/build.sh` and `apps/ghia/build-aot.sh` (the Ghia app again, compiled by the canary Bun in `$BUN_AOT`, default `~/.bun-canary/bin/bun`; it needs `verbatimModuleSyntax` removed from `vendor/ghia/packages/{native,solid}/tsconfig.json`, see the script). Each app script installs its own dependencies from its lockfile.
 - The harness has no dependencies to install.
 - Optional env vars: `GHIA_SRC=/path/to/ghia` (local Ghia checkout, see above) and `GHIA_HEAVY=<wrapper>`, a command such as a lock script that the Ghia native build and the GPUI and MyGo builds are run through (`$GHIA_HEAVY cargo build --release`). Without it, or if it is not executable, they run directly. `setup-ghia.sh`, `apps/gpui/build.sh` and `apps/mygo/build.sh` honour both as applicable.
 - A missing bundle is skipped by the harness unless you name it in `--apps`.
@@ -136,7 +137,7 @@ Run from a **foreground terminal window** on the main display, started by you: a
 
 ```
 bun harness/src/bench.ts check
-bun harness/src/bench.ts run [--apps electron,ghia,gpui,swiftui,mygo] [--rounds 5] [--launches 10] [--capture auto|on|off] [--allow-missing-permissions] [--out results/<ISO>]
+bun harness/src/bench.ts run [--apps electron,ghia,ghia-aot,gpui,swiftui,mygo] [--rounds 5] [--launches 10] [--capture auto|on|off] [--allow-missing-permissions] [--out results/<ISO>]
 bun harness/src/bench.ts report <results dir> [--include-invalid]
 bun test harness/src
 ```
@@ -159,7 +160,7 @@ Analysis lives in `harness/src/analysis.ts` (pure functions, unit-tested with sy
 
 - **Memory double-counts shared pages for Electron.** `phys_footprint` is summed over the process tree, and Electron's processes share pages that are counted once per process. The report breaks Electron down per Chromium process type.
 - **WindowServer compositing is not attributed to any app.** Its cost shows up in no app's CPU or energy numbers.
-- **Capture is not free, but it is equal.** The ScreenCaptureKit stream runs only during the frame phases (scroll, hover, type, navigate), never during idle, and costs the same for all five apps.
+- **Capture is not free, but it is equal.** The ScreenCaptureKit stream runs only during the frame phases (scroll, hover, type, navigate), never during idle, and costs the same for all six apps.
 - **SwiftUI's type-phase cost is mostly `String.contains`.** About 85% of it is Swift's grapheme-aware, Foundation-backed `String.contains` in the filter, not SwiftUI rendering; the other languages' standard substring searches are byte-level, and the app keeps the idiomatic call.
 - **SwiftUI's caret blink is free at idle.** It is a render-server animation (`NSTextInsertionIndicator`), so it costs the app nothing, while the other apps redraw the caret.
 - **MyGo's high wakeup counts come from its runtime**, not from app code: Go callbacks on the pinned main thread and handoffs with its Metal presenter thread.
@@ -175,7 +176,7 @@ SPEC.md              app spec, the contract all apps meet
 data/generate.ts     seeded generator -> data/messages.json (gitignored)
 scripts/             setup-ghia.sh, build-all.sh
 apps/electron/       Solid + Vite + Electron
-apps/ghia/           @ghia/solid app
+apps/ghia/           @ghia/solid app (build.sh; build-aot.sh builds it again with Bun AOT)
 apps/gpui/           Rust crate on gpui
 apps/swiftui/        Swift package, native SwiftUI
 apps/mygo/           Go module on MyGo's native ui package

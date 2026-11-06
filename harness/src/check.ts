@@ -49,8 +49,9 @@ export async function check(): Promise<void> {
     : `Running Mailbox-* processes (run would refuse to start): ${running.map((entry) => `${entry.pid} ${entry.command}`).join(", ")}`)
   const existing = existingApps()
   console.log("Built apps in dist/:")
+  const labelWidth = Math.max(...APP_IDS.map((app) => APP_LABELS[app].length))
   for (const app of APP_IDS) {
-    console.log(`  ${APP_LABELS[app].padEnd(9)} ${existing.includes(app) ? "present" : "missing"}  ${bundlePath(app)}`)
+    console.log(`  ${APP_LABELS[app].padEnd(labelWidth)} ${existing.includes(app) ? "present" : "missing"}  ${bundlePath(app)}`)
   }
   await requireOrRequestPermissions(result, true)
 }
