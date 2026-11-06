@@ -3,15 +3,15 @@ import { join } from 'node:path'
 import type { BunPlugin } from 'bun'
 
 /**
- * `@ghia/native`'s ESM entry loads the `.node` addon through `createRequire(import.meta.url)`,
+ * `@gpuix/native`'s ESM entry loads the `.node` addon through `createRequire(import.meta.url)`,
  * which the bundler does not follow, so a compiled binary would fail with "Cannot find native
  * binding". Its CJS entry uses a plain `require`, which embeds the addon.
  */
 export const nativeCjsPlugin: BunPlugin = {
-  name: 'ghia-native-cjs',
+  name: 'gpuix-native-cjs',
   setup(build) {
-    const directory = realpathSync(join(import.meta.dir, 'node_modules/@ghia/native'))
+    const directory = realpathSync(join(import.meta.dir, 'node_modules/@gpuix/native'))
     const entry = join(directory, 'index.cjs')
-    build.onResolve({ filter: /^@ghia\/native$/ }, () => ({ path: entry }))
+    build.onResolve({ filter: /^@gpuix\/native$/ }, () => ({ path: entry }))
   },
 }

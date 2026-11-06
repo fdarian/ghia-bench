@@ -1,6 +1,7 @@
-import { render } from '@ghia/solid'
+import { render } from '@gpuix/solid'
 import { App } from './App'
 import { loadMessages } from './data'
+import { placeWindow } from './window'
 
 const messages = loadMessages()
 
@@ -8,7 +9,5 @@ render(() => <App messages={messages} />, {
   title: 'Mailbox',
   width: 1280,
   height: 800,
-  x: 100,
-  y: 100,
-  appearance: 'light',
 })
+placeWindow(100, 100)

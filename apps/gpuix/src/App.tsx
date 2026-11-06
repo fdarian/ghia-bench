@@ -1,5 +1,5 @@
 import { For, Show, batch, createMemo, createSignal } from 'solid-js'
-import type { HostElement, StyleDesc } from '@ghia/solid'
+import type { HostElement, StyleDesc } from '@gpuix/solid'
 import type { Message } from './types'
 
 const ROW_HEIGHT = 72
@@ -50,6 +50,20 @@ function initials(name: string) {
     .join('')
 }
 
+// 0.11.0 paints the thumb permanently once scrollbarColor is set: no show-on-scroll / hide-after-1s.
+const SCROLLBAR_COLOR = 'rgba(0, 0, 0, 0.35)'
+
+function native(element: HostElement) {
+  if (!element.root) throw new Error('element is not mounted')
+  const renderer = element.root.nativeRenderer
+  if (!renderer.scrollTo || !renderer.getListScrollTop) throw new Error('renderer has no scrollTo/getListScrollTop')
+  return { scrollTo: renderer.scrollTo.bind(renderer), getListScrollTop: renderer.getListScrollTop.bind(renderer) }
+}
+
+function scrollTo(element: HostElement, top: number) {
+  native(element).scrollTo(element.id, 0, -top)
+}
+
 const oneLine: StyleDesc = { whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }
 
 function Avatar(props: { name: string; size: number; fontSize: number; style?: StyleDesc }) {
@@ -82,7 +96,8 @@ function Sidebar(props: { unreadCount: number }) {
         width: 220,
         height: '100%',
         backgroundColor: '#F4F4F5',
-        borderRight: '1px solid #E4E4E7',
+        borderRightWidth: 1,
+        borderColor: '#E4E4E7',
       }}
     >
       <div
@@ -168,7 +183,8 @@ function Sidebar(props: { unreadCount: number }) {
 const rowStyle: StyleDesc = {
   position: 'relative',
   height: ROW_HEIGHT,
-  borderBottom: '1px solid #F4F4F5',
+  borderBottomWidth: 1,
+  borderColor: '#F4F4F5',
   userSelect: 'none',
   hover: { backgroundColor: '#F4F4F5' },
 }
@@ -216,10 +232,10 @@ function Row(props: { message: Message; selected: boolean; onSelect: () => void 
           </text>
           <text style={{ flexShrink: 0, fontSize: 12, color: '#71717A' }}>{props.message.time}</text>
         </div>
-        <text style={{ ...oneLine, height: 18, lineHeight: '18px', fontSize: 13, color: '#27272A' }}>
+        <text style={{ ...oneLine, height: 18, lineHeight: 18, fontSize: 13, color: '#27272A' }}>
           {props.message.subject}
         </text>
-        <text style={{ ...oneLine, height: 16, lineHeight: '16px', fontSize: 12, color: '#71717A' }}>
+        <text style={{ ...oneLine, height: 16, lineHeight: 16, fontSize: 12, color: '#71717A' }}>
           {props.message.snippet}
         </text>
       </div>
@@ -238,7 +254,8 @@ function Detail(props: { message: Message | undefined; ref: (element: HostElemen
         minWidth: 0,
         height: '100%',
         padding: 32,
-        overflowY: 'auto',
+        overflowY: 'scroll',
+        scrollbarColor: SCROLLBAR_COLOR,
         backgroundColor: '#FFFFFF',
       }}
     >
@@ -253,7 +270,7 @@ function Detail(props: { message: Message | undefined; ref: (element: HostElemen
       >
         {(message) => (
           <div style={{ display: 'flex', flexDirection: 'column', flexShrink: 0 }}>
-            <text style={{ fontSize: 22, lineHeight: '28px', fontWeight: 600, color: '#18181B' }}>{message.subject}</text>
+            <text style={{ fontSize: 22, lineHeight: 28, fontWeight: 600, color: '#18181B' }}>{message.subject}</text>
             <div
               style={{
                 display: 'flex',
@@ -265,17 +282,17 @@ function Detail(props: { message: Message | undefined; ref: (element: HostElemen
               }}
             >
               <Avatar name={message.fromName} size={40} fontSize={15} />
-              <div style={{ display: 'flex', flexDirection: 'column', minWidth: 0 }}>
-                <text style={{ height: 20, lineHeight: '20px', fontSize: 14, fontWeight: 600, color: '#18181B' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', flexGrow: 1, minWidth: 0 }}>
+                <text style={{ height: 20, lineHeight: 20, fontSize: 14, fontWeight: 600, color: '#18181B' }}>
                   {message.fromName}
                 </text>
-                <text style={{ height: 20, lineHeight: '20px', fontSize: 13, color: '#71717A' }}>{message.fromEmail}</text>
+                <text style={{ height: 20, lineHeight: 20, fontSize: 13, color: '#71717A' }}>{message.fromEmail}</text>
               </div>
-              <text style={{ marginLeft: 'auto', flexShrink: 0, fontSize: 12, color: '#71717A' }}>{message.dateLong}</text>
+              <text style={{ flexShrink: 0, fontSize: 12, color: '#71717A' }}>{message.dateLong}</text>
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 14, marginTop: 24 }}>
               <For each={message.body}>
-                {(paragraph) => <text style={{ fontSize: 14, lineHeight: '22px', color: '#27272A' }}>{paragraph}</text>}
+                {(paragraph) => <text style={{ fontSize: 14, lineHeight: 22, color: '#27272A' }}>{paragraph}</text>}
               </For>
             </div>
           </div>
@@ -308,7 +325,7 @@ export function App(props: { messages: Message[] }) {
 
   function select(index: number) {
     setSelectedIndex(index)
-    detail.scrollTo({ top: 0 })
+    scrollTo(detail, 0)
   }
 
   function filter(value: string) {
@@ -317,26 +334,30 @@ export function App(props: { messages: Message[] }) {
       setSelectedIndex(0)
       setWindowStart(0)
     })
-    list.scrollTo({ top: 0 })
-    detail.scrollTo({ top: 0 })
+    scrollTo(list, 0)
+    scrollTo(detail, 0)
   }
 
   function reveal(index: number) {
     const top = index * ROW_HEIGHT
     const bottom = top + ROW_HEIGHT
-    if (top < list.scrollTop) list.scrollTo({ top })
-    else if (bottom > list.scrollTop + list.clientHeight) list.scrollTo({ top: bottom - list.clientHeight })
+    const anchor = native(list).getListScrollTop(list.id)
+    if (anchor === null) throw new Error('getListScrollTop returned null for the message list')
+    const scrollTop = anchor[0] * ROW_HEIGHT + anchor[1]
+    const clientHeight = anchor[2]
+    if (top < scrollTop) scrollTo(list, top)
+    else if (bottom > scrollTop + clientHeight) scrollTo(list, bottom - clientHeight)
   }
 
   function onKeyDown(event: { key?: string; preventDefault(): void }) {
-    if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+    if (event.key === 'down' || event.key === 'up') {
       event.preventDefault()
       const count = results().length
       if (count === 0) return
-      const next = Math.min(count - 1, Math.max(0, selectedIndex() + (event.key === 'ArrowDown' ? 1 : -1)))
+      const next = Math.min(count - 1, Math.max(0, selectedIndex() + (event.key === 'down' ? 1 : -1)))
       select(next)
       reveal(next)
-    } else if (event.key === 'Escape') {
+    } else if (event.key === 'escape') {
       filter('')
     }
   }
@@ -352,7 +373,8 @@ export function App(props: { messages: Message[] }) {
           width: 420,
           height: '100%',
           backgroundColor: '#FFFFFF',
-          borderRight: '1px solid #E4E4E7',
+          borderRightWidth: 1,
+          borderColor: '#E4E4E7',
         }}
       >
         <div style={{ flexShrink: 0, height: 56, padding: 12 }}>
@@ -370,7 +392,8 @@ export function App(props: { messages: Message[] }) {
               fontSize: 13,
               color: '#18181B',
               backgroundColor: '#F4F4F5',
-              border: '1px solid #E4E4E7',
+              borderWidth: 1,
+              borderColor: '#E4E4E7',
               borderRadius: 8,
               focusVisible: { borderColor: '#2563EB' },
             }}

@@ -1,18 +1,18 @@
 {
-  "name": "mailbox-ghia",
+  "name": "mailbox-gpuix",
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "description": "Mailbox on Ghia (@ghia/solid)",
+  "description": "Mailbox on gpuix (@gpuix/solid)",
   "scripts": {
     "start": "bun src/main.tsx",
     "build": "./build.sh",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@ghia/native": "link:../../vendor/ghia/packages/native",
-    "@ghia/solid": "link:../../vendor/ghia/packages/solid",
-    "solid-js": "link:../../vendor/ghia/packages/solid/node_modules/solid-js"
+    "@gpuix/native": "0.11.0",
+    "@gpuix/solid": "0.11.0",
+    "solid-js": "1.9.15"
   },
   "devDependencies": {
     "@types/bun": "^1.4.2",

@@ -1,15 +1,15 @@
 /**
- * Builds `<repo>/dist/Mailbox-Ghia.app`: one compiled Bun binary (Solid plugin, native addon
+ * Builds `<repo>/dist/Mailbox-GPUIX.app`: one compiled Bun binary (Solid plugin, native addon
  * embedded) plus messages.json in Contents/Resources. build.sh stamps and signs it.
  */
 import { cpSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import solidPlugin from '@ghia/solid/bun-plugin'
+import solidPlugin from '@gpuix/solid/bun-plugin'
 import { nativeCjsPlugin } from './native-cjs-plugin'
 
 process.env.NODE_ENV = 'production'
 
-const NAME = 'Mailbox-Ghia'
+const NAME = 'Mailbox-GPUIX'
 const root = import.meta.dir
 const repo = join(root, '../..')
 const app = join(repo, 'dist', `${NAME}.app`)
@@ -38,7 +38,7 @@ writeFileSync(
 <plist version="1.0">
 <dict>
   <key>CFBundleExecutable</key><string>${NAME}</string>
-  <key>CFBundleIdentifier</key><string>dev.ghiabench.mailbox-ghia</string>
+  <key>CFBundleIdentifier</key><string>dev.ghiabench.mailbox-gpuix</string>
   <key>CFBundleName</key><string>${NAME}</string>
   <key>CFBundleDisplayName</key><string>Mailbox</string>
   <key>CFBundlePackageType</key><string>APPL</string>
