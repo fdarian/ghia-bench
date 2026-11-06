@@ -116,7 +116,7 @@ Both scroll areas (the list and the detail pane) show an overlay scrollbar on th
 - SwiftUI: the search text starts 1 pt further right (`padding(.leading, 11)`) to land where the other apps put it, because with symmetric 10 pt padding a plain `TextField` text landed 1 pt left of the Electron reference.
 - SwiftUI: the type-phase cost is about 85% Swift's `String.contains` (grapheme-aware, Foundation-backed) in the filter, not SwiftUI rendering; the other apps' standard substring searches are byte-level. The app keeps the idiomatic call.
 - NSH: the app is TSX on nsh 0.4.0 (Longbridge's Rust UI framework, with its bundled QuickJS engine), rendered with native AppKit views in a single process. Its deviations from the spec:
-  - Window: NSH opens the window at its default 1200x800 centred; the app calls `Window.setFrame` to put the frame's top-left at (100, 100) with a 1280x828 frame (28 pt title bar), so the content area is 1280x800 from the first layout.
+  - Window: NSH opens the window at its default 1200x800 centred; the app calls `Window.setFrame` to put the frame's top-left at (100, 100) with a 1280x828 frame (28 pt title bar), so the first layout is at the default 1200x800 and the next one at 1280x800.
   - Executable: `nsh package` names it `MailboxNSH`; `build.sh` renames it `Mailbox-NSH`, updates `CFBundleExecutable`, then re-signs the bundle.
   - Data: `messages.json` ships at `Contents/Resources/nsh/assets/messages.json` and is read with `fetch("asset:/messages.json")` before `mount`, so the first frame waits for the load.
   - Caret: the native `NSTextField` caret with the system blink; the 500 ms solid hold is not implemented.
