@@ -52,11 +52,17 @@ export function goVersion(output: string): string {
   return match[1]
 }
 
+/** The paths `git status --porcelain` lists that are not in `ignore`. */
+export function changedPaths(porcelain: string, ignore: Set<string>): string[] {
+  return porcelain.split("\n")
+    .map((line) => line.trim().replace(/^\S+\s+/, ""))
+    .filter((path) => path !== "" && !ignore.has(path))
+}
+
 async function gitState(dir: string, ignore: Set<string> = new Set()): Promise<{ sha: string; dirty: boolean }> {
   const sha = await exec(["git", "-C", dir, "rev-parse", "HEAD"])
   const status = await exec(["git", "-C", dir, "status", "--porcelain"])
-  const changed = status.split("\n").filter((line) => line !== "" && !ignore.has(line.replace(/^\S+\s+/, "")))
-  return { sha, dirty: changed.length > 0 }
+  return { sha, dirty: changedPaths(status, ignore).length > 0 }
 }
 
 function packageVersion(path: string): string {

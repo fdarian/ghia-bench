@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import { goVersion, gpuiSource, mygoVersion, swiftVersion, xcodeVersion } from "./build-stamp"
+import { changedPaths, goVersion, gpuiSource, mygoVersion, swiftVersion, xcodeVersion } from "./build-stamp"
 
 describe("mygoVersion", () => {
   test("reads the egoist/mygo requirement in block or single-line form", () => {
@@ -34,5 +34,17 @@ describe("tool version parsers", () => {
     expect(() => swiftVersion("swift: command not found")).toThrow()
     expect(() => xcodeVersion("xcode-select: error")).toThrow()
     expect(() => goVersion("")).toThrow()
+  })
+})
+
+describe("changedPaths", () => {
+  // exec() trims its output, so the first status line has lost its leading space.
+  const status = "M packages/native/index.cjs\n M packages/native/index.js\n?? .setup-ghia-built\n M src/real.ts"
+  test("lists every path, whatever its status columns", () => {
+    expect(changedPaths(status, new Set())).toEqual(["packages/native/index.cjs", "packages/native/index.js", ".setup-ghia-built", "src/real.ts"])
+  })
+  test("leaves out the ignored ones, so an otherwise clean tree reads as clean", () => {
+    expect(changedPaths(status, new Set(["packages/native/index.cjs", "packages/native/index.js", ".setup-ghia-built"]))).toEqual(["src/real.ts"])
+    expect(changedPaths("", new Set())).toEqual([])
   })
 })
