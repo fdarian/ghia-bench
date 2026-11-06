@@ -71,7 +71,12 @@ function packageVersion(path: string): string {
   return version
 }
 
-async function ghiaVersions(): Promise<StampVersions["ghia"]> {
+/** `bun --revision` of the Bun that built the bundle: the one running this script, or $BUN_AOT's compiler. */
+async function bunRevision(bun: string): Promise<string> {
+  return exec([bun, "--revision"])
+}
+
+async function ghiaVersions(bun: string): Promise<StampVersions["ghia"]> {
   const ghia = await gitState(GHIA_DIR, GHIA_BUILD_OUTPUTS)
   const modules = join(REPO_ROOT, "apps", "ghia", "node_modules", "@ghia")
   return {
@@ -81,7 +86,14 @@ async function ghiaVersions(): Promise<StampVersions["ghia"]> {
     zedSha: (await gitState(join(GHIA_DIR, "zed"))).sha,
     dirty: ghia.dirty,
     source: await exec(["git", "-C", GHIA_DIR, "remote", "get-url", "origin"]),
+    bun: await bunRevision(bun),
   }
+}
+
+async function ghiaAotVersions(): Promise<StampVersions["ghia-aot"]> {
+  const compiler = process.env.BUN_AOT
+  if (!compiler) throw new Error("BUN_AOT is not set; apps/ghia/build-aot.sh sets it to the Bun that compiled the bundle")
+  return { ...(await ghiaVersions(compiler)), aot: true }
 }
 
 async function gpuiVersions(): Promise<StampVersions["gpui"]> {
@@ -120,7 +132,8 @@ async function electronVersions(bundle: string): Promise<StampVersions["electron
 export async function stampBundle(app: AppId, bundle: string): Promise<BuildStamp> {
   const common = { builtAt: new Date().toISOString(), bench: await gitState(REPO_ROOT) }
   switch (app) {
-    case "ghia": return { app, ...common, versions: await ghiaVersions() }
+    case "ghia": return { app, ...common, versions: await ghiaVersions(process.execPath) }
+    case "ghia-aot": return { app, ...common, versions: await ghiaAotVersions() }
     case "gpui": return { app, ...common, versions: await gpuiVersions() }
     case "swiftui": return { app, ...common, versions: await swiftuiVersions() }
     case "mygo": return { app, ...common, versions: await mygoVersions() }

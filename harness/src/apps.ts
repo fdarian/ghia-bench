@@ -1,10 +1,11 @@
 /** The one list of implementations under test; the order is the column order in the report. */
 export const APPS = [
-  { id: "electron", label: "Electron", bundle: "Mailbox-Electron.app", multiProcess: true, chromium: true },
-  { id: "ghia", label: "Ghia", bundle: "Mailbox-Ghia.app", multiProcess: false, chromium: false },
-  { id: "gpui", label: "GPUI", bundle: "Mailbox-GPUI.app", multiProcess: false, chromium: false },
-  { id: "swiftui", label: "SwiftUI", bundle: "Mailbox-SwiftUI.app", multiProcess: false, chromium: false },
-  { id: "mygo", label: "MyGo", bundle: "Mailbox-MyGo.app", multiProcess: false, chromium: false },
+  { id: "electron", buildScript: "apps/electron/build.sh", label: "Electron", bundle: "Mailbox-Electron.app", multiProcess: true, chromium: true },
+  { id: "ghia", buildScript: "apps/ghia/build.sh", label: "Ghia", bundle: "Mailbox-Ghia.app", multiProcess: false, chromium: false },
+  { id: "ghia-aot", buildScript: "apps/ghia/build-aot.sh", label: "Ghia (bun AOT)", bundle: "Mailbox-GhiaAOT.app", multiProcess: false, chromium: false },
+  { id: "gpui", buildScript: "apps/gpui/build.sh", label: "GPUI", bundle: "Mailbox-GPUI.app", multiProcess: false, chromium: false },
+  { id: "swiftui", buildScript: "apps/swiftui/build.sh", label: "SwiftUI", bundle: "Mailbox-SwiftUI.app", multiProcess: false, chromium: false },
+  { id: "mygo", buildScript: "apps/mygo/build.sh", label: "MyGo", bundle: "Mailbox-MyGo.app", multiProcess: false, chromium: false },
 ] as const
 
 export type AppId = (typeof APPS)[number]["id"]

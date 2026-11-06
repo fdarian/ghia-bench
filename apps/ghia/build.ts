@@ -1,6 +1,9 @@
 /**
  * Builds `<repo>/dist/Mailbox-Ghia.app`: one compiled Bun binary (Solid plugin, native addon
  * embedded) plus messages.json in Contents/Resources. build.sh stamps and signs it.
+ *
+ * With `--aot` it builds `Mailbox-GhiaAOT.app` from the same sources, compiled ahead of time to
+ * machine code (a Bun with `compile.aot`); build-aot.sh stamps and signs it.
  */
 import { cpSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
@@ -9,7 +12,8 @@ import { nativeCjsPlugin } from './native-cjs-plugin'
 
 process.env.NODE_ENV = 'production'
 
-const NAME = 'Mailbox-Ghia'
+const aot = Bun.argv.includes('--aot')
+const NAME = aot ? 'Mailbox-GhiaAOT' : 'Mailbox-Ghia'
 const root = import.meta.dir
 const repo = join(root, '../..')
 const app = join(repo, 'dist', `${NAME}.app`)
@@ -21,7 +25,7 @@ mkdirSync(join(app, 'Contents/Resources'), { recursive: true })
 
 const result = await Bun.build({
   entrypoints: [join(root, 'src/main.tsx')],
-  compile: { outfile: binary, autoloadBunfig: false },
+  compile: aot ? { outfile: binary, autoloadBunfig: false, aot: true } : { outfile: binary, autoloadBunfig: false },
   plugins: [solidPlugin, nativeCjsPlugin],
   minify: true,
   define: { 'process.env.NODE_ENV': '"production"' },
@@ -38,7 +42,7 @@ writeFileSync(
 <plist version="1.0">
 <dict>
   <key>CFBundleExecutable</key><string>${NAME}</string>
-  <key>CFBundleIdentifier</key><string>dev.ghiabench.mailbox-ghia</string>
+  <key>CFBundleIdentifier</key><string>${aot ? 'dev.ghiabench.mailbox-ghiaaot' : 'dev.ghiabench.mailbox-ghia'}</string>
   <key>CFBundleName</key><string>${NAME}</string>
   <key>CFBundleDisplayName</key><string>Mailbox</string>
   <key>CFBundlePackageType</key><string>APPL</string>

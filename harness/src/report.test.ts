@@ -75,11 +75,17 @@ describe("renderEnvironment", () => {
   const all = renderEnvironment({ ...env, args: { ...env.args, apps: ["electron", "ghia", "gpui", "swiftui", "mygo"] }, apps: appInfos(["electron", "ghia", "gpui", "swiftui", "mygo"]) })
 
   test("each app's versions come from its stamp", () => {
-    expect(all).toContain("- Ghia 8fcd806f5969c5eafc00ee1114ef7b66d8a2ca15, zed 451f7ec4d15f7d7444a1f347d5b916e2a7989bab, @ghia/native 0.11.1, @ghia/solid 0.11.1, from https://github.com/fdarian/ghia.git.")
+    expect(all).toContain("- Ghia 8fcd806f5969c5eafc00ee1114ef7b66d8a2ca15, zed 451f7ec4d15f7d7444a1f347d5b916e2a7989bab, @ghia/native 0.11.1, @ghia/solid 0.11.1, from https://github.com/fdarian/ghia.git; built with Bun 1.4.4+38afee6c8.")
     expect(all).toContain("- GPUI app: upstream gpui from https://github.com/zed-industries/zed at 654efae441bc8eb117d0042bb28cd7cf3570bdc9, rustc 1.97.1 (abcdef 2026-09-01).")
     expect(all).toContain("- Electron 45.2.2, Chromium 156.0.8078.80.")
     expect(all).toContain("- MyGo v0.7.5-0.20261105040656-977ea57e0baf, go 1.27.3.")
     expect(all).toContain("- Swift 6.4.2; Xcode 27.2 (27B52); macOS SDK 27.0.")
+  })
+
+  test("Ghia (bun AOT) lists the Bun that compiled it and AOT", () => {
+    const withAot = renderEnvironment({ ...env, args: { ...env.args, apps: ["ghia", "ghia-aot"] }, apps: appInfos(["ghia", "ghia-aot"]) })
+    expect(withAot).toContain("- Ghia (bun AOT) 8fcd806f5969c5eafc00ee1114ef7b66d8a2ca15, zed 451f7ec4d15f7d7444a1f347d5b916e2a7989bab, @ghia/native 0.11.1, @ghia/solid 0.11.1, from https://github.com/fdarian/ghia.git; built with Bun 1.4.4-canary.1+b1305ddc7, AOT on.")
+    expect(all).not.toContain("bun AOT")
   })
 
   test("names when and from which bench commit each bundle was built", () => {

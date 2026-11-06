@@ -303,6 +303,7 @@ describe("groups", () => {
   test("multi-process apps get a breakdown, single-process apps do not", () => {
     expect(groupNames("electron")).toContain("renderer")
     expect(groupNames("ghia")).toBeNull()
+    expect(groupNames("ghia-aot")).toBeNull()
     expect(groupNames("swiftui")).toBeNull()
     expect(groupNames("mygo")).toBeNull()
     expect(groupFunction("gpui", 1, {})(proc(5))).toBe("all")

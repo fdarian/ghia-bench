@@ -41,7 +41,7 @@ describe("environmentLine", () => {
     const line = environmentLine(env)
     expect(line).toBe(
       "2026-11-05. Apple M1 Pro, 16 GiB RAM, macOS 27.0.1 (26A434), 1512 x 982 pt display at 120 Hz, scroll bars: when scrolling, load average 4.56 / 5.56 / 5.29. "
-      + "Ghia 8fcd806 (zed 451f7ec), gpui 654efae, Electron 45.2.2 (Chromium 156.0.8078.80), MyGo v0.7.5-0.20261105040656-977ea57e0baf, Swift 6.4.2, Xcode 27.2, Bun 1.4.4.",
+      + "Ghia 8fcd806 (zed 451f7ec, Bun 1.4.4+38afee6c8), gpui 654efae, Electron 45.2.2 (Chromium 156.0.8078.80), MyGo v0.7.5-0.20261105040656-977ea57e0baf, Swift 6.4.2, Xcode 27.2, Bun 1.4.4.",
     )
   })
 
@@ -52,9 +52,14 @@ describe("environmentLine", () => {
     expect(line).not.toContain("Swift")
   })
 
+  test("Ghia (bun AOT) appears with the Bun that compiled it and AOT", () => {
+    const line = environmentLine({ ...env, args: { ...env.args, apps: ["ghia", "ghia-aot"] }, apps: appInfos(["ghia", "ghia-aot"]) })
+    expect(line).toContain("Ghia 8fcd806 (zed 451f7ec, Bun 1.4.4+38afee6c8), Ghia AOT 8fcd806 (zed 451f7ec, Bun 1.4.4-canary.1+b1305ddc7, AOT), Bun")
+  })
+
   test("a dirty Ghia tree is marked", () => {
     const ghia = { ...env.apps.ghia!, build: { ...STAMPS.ghia, versions: { ...STAMPS.ghia.versions, dirty: true } } }
-    expect(environmentLine({ ...env, apps: { ...env.apps, ghia } })).toContain("Ghia 8fcd806+dirty (zed 451f7ec),")
+    expect(environmentLine({ ...env, apps: { ...env.apps, ghia } })).toContain("Ghia 8fcd806+dirty (zed 451f7ec, Bun 1.4.4+38afee6c8),")
   })
 
   test("an app in the run with no recorded bundle is an error, not a blank", () => {

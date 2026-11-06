@@ -25,9 +25,10 @@ const SCROLL_BARS: Record<string, string> = {
   unset: "automatic (unset)",
 }
 
-function ghiaVersion(stamp: BuildStamp<"ghia">): string {
+function ghiaVersion(stamp: BuildStamp<"ghia" | "ghia-aot">): string {
   const v = stamp.versions
-  return `${v.sha.slice(0, 7)}${v.dirty ? "+dirty" : ""} (zed ${v.zedSha.slice(0, 7)})`
+  const aot = "aot" in v && v.aot ? ", AOT" : ""
+  return `${v.sha.slice(0, 7)}${v.dirty ? "+dirty" : ""} (zed ${v.zedSha.slice(0, 7)}, Bun ${v.bun}${aot})`
 }
 
 export function runDate(env: Env): string {
@@ -56,6 +57,7 @@ export function environmentLine(env: Env): string {
   ]
   const versions: string[] = []
   if (apps.includes("ghia")) versions.push(`Ghia ${ghiaVersion(buildOf(env, "ghia"))}`)
+  if (apps.includes("ghia-aot")) versions.push(`Ghia AOT ${ghiaVersion(buildOf(env, "ghia-aot"))}`)
   if (apps.includes("gpui")) versions.push(`gpui ${buildOf(env, "gpui").versions.commit.slice(0, 7)}`)
   if (apps.includes("electron")) {
     const electron = buildOf(env, "electron").versions
