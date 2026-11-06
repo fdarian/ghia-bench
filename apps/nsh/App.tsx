@@ -1,5 +1,5 @@
 import { batch, computed, keymap, List, mount, Scroll, signal, Text, View } from "nsh";
-import type { InputRef, ListRef, ScrollRef, TextStyle } from "nsh";
+import type { ListRef, ScrollRef, TextStyle } from "nsh";
 import { Input } from "nsh/base";
 import { Window } from "nsh/desktop";
 import { loadMessages } from "./data";
@@ -222,7 +222,6 @@ function App(props: { messages: Message[] }) {
 
   let list!: ListRef;
   let detail!: ScrollRef;
-  let search!: InputRef;
 
   const results = computed(() => {
     const query = text().trim().toLowerCase();
@@ -267,14 +266,8 @@ function App(props: { messages: Message[] }) {
 
   keymap.bind("down", () => step(1), { when: "always", repeat: true });
   keymap.bind("up", () => step(-1), { when: "always", repeat: true });
-  keymap.bind(
-    "escape",
-    () => {
-      filter("");
-      search.focus();
-    },
-    { when: "always" },
-  );
+  // No search.focus() here: on top of the clear it made the native field insert stray completion text.
+  keymap.bind("escape", () => filter(""), { when: "always" });
 
   return (
     <View style={{ flexDirection: "row", width: "100%", height: "100%", backgroundColor: "#FFFFFF" }}>
@@ -282,7 +275,6 @@ function App(props: { messages: Message[] }) {
       <View style={{ flexShrink: 0, width: 420, height: "100%", backgroundColor: "#FFFFFF", borderRightWidth: 1, borderRightColor: "#E4E4E7" }}>
         <View style={{ flexShrink: 0, height: 56, padding: 12 }}>
           <Input
-            ref={search}
             autoFocus
             value={text()}
             placeholder="Search mail"
