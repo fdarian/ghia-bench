@@ -14,7 +14,12 @@ import { APP_IDS, type AppId } from "./types"
 const GHIA_DIR = join(REPO_ROOT, "vendor", "ghia")
 
 // Files setup-ghia.sh's own native build rewrites, which must not make the Ghia tree look edited.
-const GHIA_BUILD_OUTPUTS = new Set([".setup-ghia-built", "packages/native/index.js", "packages/native/index.cjs"])
+// The two tsconfig.json files are type-check settings that bun compile --aot needs changed in the
+// linked Ghia tree (see build-aot.sh); they change nothing that ships.
+const GHIA_BUILD_OUTPUTS = new Set([
+  ".setup-ghia-built", "packages/native/index.js", "packages/native/index.cjs",
+  "packages/native/tsconfig.json", "packages/solid/tsconfig.json",
+])
 
 /** The git source and resolved commit of the `gpui` package in apps/gpui/Cargo.lock. */
 export function gpuiSource(cargoLock: string): { git: string; commit: string } {
