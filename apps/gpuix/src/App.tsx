@@ -253,7 +253,6 @@ function Detail(props: { message: Message | undefined; ref: (element: HostElemen
         flexGrow: 1,
         minWidth: 0,
         height: '100%',
-        padding: 32,
         overflowY: 'scroll',
         scrollbarColor: SCROLLBAR_COLOR,
         backgroundColor: '#FFFFFF',
@@ -269,7 +268,8 @@ function Detail(props: { message: Message | undefined; ref: (element: HostElemen
         }
       >
         {(message) => (
-          <div style={{ display: 'flex', flexDirection: 'column', flexShrink: 0 }}>
+          // Padding lives here, not on the scroller: 0.11.0 adds a scroller's own padding to its scroll extent.
+          <div style={{ display: 'flex', flexDirection: 'column', flexShrink: 0, padding: 32 }}>
             <text style={{ fontSize: 22, lineHeight: 28, fontWeight: 600, color: '#18181B' }}>{message.subject}</text>
             <div
               style={{
@@ -384,6 +384,7 @@ export function App(props: { messages: Message[] }) {
             placeholder="Search mail"
             onChange={(event) => filter(event.value ?? '')}
             onKeyDown={onKeyDown}
+            theme={{ appearance: 'light', caret: '#18181B' }}
             style={{
               width: 396,
               height: 32,
@@ -412,7 +413,7 @@ export function App(props: { messages: Message[] }) {
               Math.max(0, Math.floor(((event.startIndex ?? 0) - WINDOW_LEAD) / WINDOW_STEP) * WINDOW_STEP),
             )
           }
-          style={{ flexGrow: 1, minHeight: 0 }}
+          style={{ flexGrow: 1, minHeight: 0, overflowY: 'scroll', scrollbarColor: SCROLLBAR_COLOR }}
         >
           <For each={windowRows()}>
             {(message, index) => (
