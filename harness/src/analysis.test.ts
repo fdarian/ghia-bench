@@ -304,6 +304,7 @@ describe("groups", () => {
     expect(groupNames("electron")).toContain("renderer")
     expect(groupNames("ghia")).toBeNull()
     expect(groupNames("swiftui")).toBeNull()
+    expect(groupNames("nsh")).toBeNull()
     expect(groupNames("mygo")).toBeNull()
     expect(groupFunction("gpui", 1, {})(proc(5))).toBe("all")
   })

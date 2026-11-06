@@ -8,6 +8,7 @@ export type StampVersions = {
   ghia: { native: string; solid: string; sha: string; zedSha: string; dirty: boolean; source: string }
   gpui: { git: string; commit: string; rustc: string }
   swiftui: { swift: string; xcode: string; xcodeBuild: string; sdk: string }
+  nsh: { nsh: string; commit: string; source: string }
   mygo: { go: string; mygo: string }
   electron: { electron: string; chromium: string }
 }
@@ -26,6 +27,7 @@ const FIELD_TYPES: { [A in AppId]: Record<keyof StampVersions[A], "string" | "bo
   ghia: { native: "string", solid: "string", sha: "string", zedSha: "string", dirty: "boolean", source: "string" },
   gpui: { git: "string", commit: "string", rustc: "string" },
   swiftui: { swift: "string", xcode: "string", xcodeBuild: "string", sdk: "string" },
+  nsh: { nsh: "string", commit: "string", source: "string" },
   mygo: { go: "string", mygo: "string" },
   electron: { electron: "string", chromium: "string" },
 }

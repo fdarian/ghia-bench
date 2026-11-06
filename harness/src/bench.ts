@@ -10,7 +10,7 @@ import { APP_IDS, type AppId } from "./types"
 
 const USAGE = `usage:
   bun harness/src/bench.ts check
-  bun harness/src/bench.ts run [--apps electron,ghia,gpui,swiftui,mygo] [--rounds 5] [--launches 10] [--capture auto|on|off] [--allow-missing-permissions] [--out results/<ISO>]
+  bun harness/src/bench.ts run [--apps electron,ghia,gpui,swiftui,nsh,mygo] [--rounds 5] [--launches 10] [--capture auto|on|off] [--allow-missing-permissions] [--out results/<ISO>]
   bun harness/src/bench.ts report <results dir> [--include-invalid]
   bun harness/src/bench.ts publish <results dir> [--readme README.md]`
 

@@ -82,6 +82,12 @@ describe("renderEnvironment", () => {
     expect(all).toContain("- Swift 6.4.2; Xcode 27.2 (27B52); macOS SDK 27.0.")
   })
 
+  test("NSH lists its version, commit and source", () => {
+    const withNsh = renderEnvironment({ ...env, args: { ...env.args, apps: ["ghia", "nsh"] }, apps: appInfos(["ghia", "nsh"]) })
+    expect(withNsh).toContain("- NSH 0.4.0, commit e626a8d, from homebrew.")
+    expect(all).not.toContain("NSH 0.4.0")
+  })
+
   test("names when and from which bench commit each bundle was built", () => {
     expect(all).toContain("Electron 2026-11-06T01:00:00.000Z at bench aaaaaaa")
     expect(all).toContain("MyGo 2026-11-06T01:04:00.000Z at bench aaaaaaa")

@@ -66,6 +66,10 @@ export function environmentLine(env: Env): string {
     const swift = buildOf(env, "swiftui").versions
     versions.push(`Swift ${swift.swift}`, `Xcode ${swift.xcode}`)
   }
+  if (apps.includes("nsh")) {
+    const nsh = buildOf(env, "nsh").versions
+    versions.push(`NSH ${nsh.nsh} (${nsh.commit}, ${nsh.source})`)
+  }
   versions.push(`Bun ${env.bun}`)
   return `${runDate(env)}. ${machine.join(", ")}. ${versions.join(", ")}.`
 }

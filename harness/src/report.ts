@@ -377,6 +377,11 @@ function swiftLine(stamp: BuildStamp<"swiftui">): string {
   return `Swift ${v.swift}; Xcode ${v.xcode} (${v.xcodeBuild}); macOS SDK ${v.sdk}.`
 }
 
+function nshLine(stamp: BuildStamp<"nsh">): string {
+  const v = stamp.versions
+  return `NSH ${v.nsh}, commit ${v.commit}, from ${v.source}.`
+}
+
 function builtLine(stamp: BuildStamp): string {
   return `${APP_LABELS[stamp.app]} ${stamp.builtAt} at bench ${stamp.bench.sha.slice(0, 7)}${stamp.bench.dirty ? " (dirty)" : ""}`
 }
@@ -393,6 +398,7 @@ export function renderEnvironment(env: Env): string {
     ...(env.args.apps.includes("electron") ? [electronLine(buildOf(env, "electron"))] : []),
     ...(env.args.apps.includes("mygo") ? [mygoLine(buildOf(env, "mygo"))] : []),
     ...(env.args.apps.includes("swiftui") ? [swiftLine(buildOf(env, "swiftui"))] : []),
+    ...(env.args.apps.includes("nsh") ? [nshLine(buildOf(env, "nsh"))] : []),
     `Bun ${env.bun}.`,
     `Bundles built (from the stamps in the bundles): ${env.args.apps.map((app) => builtLine(buildOf(env, app))).join("; ")}.`,
     `Frame capture: ${env.capture.enabled ? "on" : "off"} (${env.capture.reason}). Input: ${env.input.enabled ? "on" : "off"} (${env.input.reason}).`,

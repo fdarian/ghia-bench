@@ -4,6 +4,7 @@ export const APPS = [
   { id: "ghia", label: "Ghia", bundle: "Mailbox-Ghia.app", multiProcess: false, chromium: false },
   { id: "gpui", label: "GPUI", bundle: "Mailbox-GPUI.app", multiProcess: false, chromium: false },
   { id: "swiftui", label: "SwiftUI", bundle: "Mailbox-SwiftUI.app", multiProcess: false, chromium: false },
+  { id: "nsh", label: "NSH", bundle: "Mailbox-NSH.app", multiProcess: false, chromium: false },
   { id: "mygo", label: "MyGo", bundle: "Mailbox-MyGo.app", multiProcess: false, chromium: false },
 ] as const
 

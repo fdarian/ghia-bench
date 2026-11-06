@@ -39,6 +39,13 @@ export function swiftVersion(output: string): string {
   return match[1]
 }
 
+/** Version and commit of `nsh --version`, e.g. "nsh 0.4.0 (e626a8d)". */
+export function nshVersion(output: string): { nsh: string; commit: string } {
+  const match = /^nsh (\S+) \(([0-9a-f]+)\)$/.exec(output)
+  if (!match) throw new Error(`unparseable nsh --version output: ${output}`)
+  return { nsh: match[1], commit: match[2] }
+}
+
 /** Version and build of `xcodebuild -version`, e.g. "Xcode 27.2\nBuild version 27B52". */
 export function xcodeVersion(output: string): { xcode: string; xcodeBuild: string } {
   const match = /^Xcode (\S+)\s+Build version (\S+)/.exec(output)
@@ -100,6 +107,10 @@ async function swiftuiVersions(): Promise<StampVersions["swiftui"]> {
   }
 }
 
+async function nshVersions(): Promise<StampVersions["nsh"]> {
+  return { ...nshVersion(await exec(["nsh", "--version"])), source: "homebrew" }
+}
+
 async function mygoVersions(): Promise<StampVersions["mygo"]> {
   const dir = join(REPO_ROOT, "apps", "mygo")
   return {
@@ -123,6 +134,7 @@ export async function stampBundle(app: AppId, bundle: string): Promise<BuildStam
     case "ghia": return { app, ...common, versions: await ghiaVersions() }
     case "gpui": return { app, ...common, versions: await gpuiVersions() }
     case "swiftui": return { app, ...common, versions: await swiftuiVersions() }
+    case "nsh": return { app, ...common, versions: await nshVersions() }
     case "mygo": return { app, ...common, versions: await mygoVersions() }
     case "electron": return { app, ...common, versions: await electronVersions(bundle) }
   }

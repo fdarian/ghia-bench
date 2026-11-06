@@ -21,6 +21,10 @@ export const STAMPS: { [A in AppId]: BuildStamp<A> } = {
     app: "swiftui", builtAt: "2026-11-06T01:03:00.000Z", bench: { sha: "aaaaaaa1111111111111111111111111111111aa", dirty: false },
     versions: { swift: "6.4.2", xcode: "27.2", xcodeBuild: "27B52", sdk: "27.0" },
   },
+  nsh: {
+    app: "nsh", builtAt: "2026-11-06T01:05:00.000Z", bench: { sha: "aaaaaaa1111111111111111111111111111111aa", dirty: false },
+    versions: { nsh: "0.4.0", commit: "e626a8d", source: "homebrew" },
+  },
   mygo: {
     app: "mygo", builtAt: "2026-11-06T01:04:00.000Z", bench: { sha: "aaaaaaa1111111111111111111111111111111aa", dirty: false },
     versions: { go: "1.27.3", mygo: "v0.7.5-0.20261105040656-977ea57e0baf" },
