@@ -3,7 +3,6 @@ import { parseArgs } from "node:util"
 import { check } from "./check"
 import { existingApps } from "./env"
 import { REPO_ROOT } from "./helper"
-import { recordHistory, writeHistoryReport } from "./history"
 import { DEFAULT_PUBLISHED, DEFAULT_README, publish } from "./publish"
 import { readEnv, writeReport } from "./report"
 import { runBench, type CaptureMode } from "./run"
@@ -13,9 +12,7 @@ const USAGE = `usage:
   bun harness/src/bench.ts check
   bun harness/src/bench.ts run [--apps electron,ghia,gpui,swiftui,mygo] [--rounds 5] [--launches 10] [--capture auto|on|off] [--allow-missing-permissions] [--out results/<ISO>]
   bun harness/src/bench.ts report <results dir> [--include-invalid]
-  bun harness/src/bench.ts publish <results dir> [--readme README.md]
-  bun harness/src/bench.ts history record <npm version | git sha> [--rounds 5] [--launches 10] [--capture auto|on|off]
-  bun harness/src/bench.ts history report`
+  bun harness/src/bench.ts publish <results dir> [--readme README.md]`
 
 function positiveInt(name: string, text: string, min: number): number {
   const value = Number(text)
@@ -83,30 +80,6 @@ async function main(): Promise<void> {
       const readmePath = parsed.values.readme ? resolve(parsed.values.readme) : DEFAULT_README
       const name = publish({ resultsDir, readmePath, publishedRoot: DEFAULT_PUBLISHED })
       console.log(`copied report.md and env.json to published/${name}/; updated the results section of ${readmePath}`)
-      return
-    }
-    case "history": {
-      const sub = rest[0]
-      if (sub === "report") {
-        if (rest.length !== 1) throw new Error(USAGE)
-        writeHistoryReport()
-        return
-      }
-      if (sub !== "record") throw new Error(USAGE)
-      const parsed = parseArgs({
-        args: rest.slice(1),
-        options: { rounds: { type: "string", default: "5" }, launches: { type: "string", default: "10" }, capture: { type: "string", default: "auto" } },
-        allowPositionals: true,
-      })
-      if (parsed.positionals.length !== 1) throw new Error(USAGE)
-      const capture = parsed.values.capture
-      if (capture !== "auto" && capture !== "on" && capture !== "off") throw new Error(`--capture must be auto, on or off, got ${capture}`)
-      await recordHistory({
-        target: parsed.positionals[0],
-        rounds: positiveInt("rounds", parsed.values.rounds!, 1),
-        launches: positiveInt("launches", parsed.values.launches!, 0),
-        capture: capture as CaptureMode,
-      }, Bun.argv.slice(2))
       return
     }
     default:

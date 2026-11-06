@@ -140,7 +140,6 @@ export function buildResultsSection(env: Env, metrics: SummaryMetric[], reportLi
   if (missing) parts.push(missing)
   parts.push(
     `The per-process breakdown and the validity notes are in [${reportLink}](./${reportLink}).`,
-    "Ghia over time: [history/ghia/README.md](./history/ghia/README.md).",
     RESULTS_END,
   )
   return parts.join("\n\n")

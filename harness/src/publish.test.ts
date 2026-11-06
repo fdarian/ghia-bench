@@ -121,11 +121,10 @@ describe("missingRowsSentence", () => {
 describe("buildResultsSection", () => {
   const section = buildResultsSection(env, metrics, "published/2026-11-05-no-capture/report.md")
 
-  test("is wrapped in the markers and links the report and the history", () => {
+  test("is wrapped in the markers and links the report", () => {
     expect(section.startsWith(RESULTS_START)).toBe(true)
     expect(section.endsWith(RESULTS_END)).toBe(true)
     expect(section).toContain("[published/2026-11-05-no-capture/report.md](./published/2026-11-05-no-capture/report.md)")
-    expect(section).toContain("[history/ghia/README.md](./history/ghia/README.md)")
     expect(section).toContain("Frame capture: off (--capture off). Input: on (post-event and Accessibility granted).")
   })
 })

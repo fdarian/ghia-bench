@@ -144,7 +144,7 @@ export type AppInfo = {
 
 export type Env = {
   startedAt: string
-  args: { apps: AppId[]; rounds: number; launches: number; capture: string; out: string; bundles?: Partial<Record<AppId, string>> }
+  args: { apps: AppId[]; rounds: number; launches: number; capture: string; out: string }
   capture: { enabled: boolean; reason: string }
   input: { enabled: boolean; reason: string }
   probe: Probe

@@ -6,15 +6,8 @@ import { appSpec } from "./apps"
 import type { AppId, AppInfo, Env, Probe } from "./types"
 import { APP_IDS } from "./types"
 
-const bundleOverrides: Partial<Record<AppId, string>> = {}
-
-/** Points an app at a bundle other than dist/<its bundle> (history records build Ghia into dist/history/). */
-export function overrideBundles(overrides: Partial<Record<AppId, string>>): void {
-  Object.assign(bundleOverrides, overrides)
-}
-
 export function bundlePath(app: AppId): string {
-  return bundleOverrides[app] ?? join(REPO_ROOT, "dist", appSpec(app).bundle)
+  return join(REPO_ROOT, "dist", appSpec(app).bundle)
 }
 
 export function existingApps(): AppId[] {
