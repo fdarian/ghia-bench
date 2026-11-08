@@ -541,10 +541,35 @@ fn main() {
             )
             .expect("open window");
         cx.activate(true);
+        accept_mouse_moved_events();
 
         #[cfg(feature = "snapshot")]
         snapshot::run(window, cx);
         #[cfg(not(feature = "snapshot"))]
         let _ = window;
     });
+}
+
+// Upstream gpui sets acceptsMouseMovedEvents to NO on a normal window and takes hover from an NSTrackingArea, which the mouse-moved events
+// the harness posts with CGEventPostToPid do not feed: AppKit drops them before they reach the view, so no hover would be computed. Turning
+// it on makes the posted moves reach gpui's mouse-move handler as a real pointer's do. gpui has no API for it, hence the libobjc calls.
+fn accept_mouse_moved_events() {
+    use std::ffi::{c_char, c_void};
+    extern "C" {
+        fn objc_getClass(name: *const c_char) -> *mut c_void;
+        fn sel_registerName(name: *const c_char) -> *mut c_void;
+        fn objc_msgSend();
+    }
+    unsafe {
+        let send_object: unsafe extern "C" fn(*mut c_void, *mut c_void) -> *mut c_void = std::mem::transmute(objc_msgSend as *const ());
+        let send_count: unsafe extern "C" fn(*mut c_void, *mut c_void) -> usize = std::mem::transmute(objc_msgSend as *const ());
+        let send_at: unsafe extern "C" fn(*mut c_void, *mut c_void, usize) -> *mut c_void = std::mem::transmute(objc_msgSend as *const ());
+        let send_bool: unsafe extern "C" fn(*mut c_void, *mut c_void, bool) = std::mem::transmute(objc_msgSend as *const ());
+        let app = send_object(objc_getClass(c"NSApplication".as_ptr()), sel_registerName(c"sharedApplication".as_ptr()));
+        let windows = send_object(app, sel_registerName(c"windows".as_ptr()));
+        for index in 0..send_count(windows, sel_registerName(c"count".as_ptr())) {
+            let window = send_at(windows, sel_registerName(c"objectAtIndex:".as_ptr()), index);
+            send_bool(window, sel_registerName(c"setAcceptsMouseMovedEvents:".as_ptr()), true);
+        }
+    }
 }
