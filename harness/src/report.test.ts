@@ -88,6 +88,18 @@ describe("renderEnvironment", () => {
     expect(all).not.toContain("bun AOT")
   })
 
+  test("GPUIX lists its three npm packages", () => {
+    const withGpuix = renderEnvironment({ ...env, args: { ...env.args, apps: ["ghia", "gpuix"] }, apps: appInfos(["ghia", "gpuix"]) })
+    expect(withGpuix).toContain("- GPUIX @gpuix/solid 0.11.0, @gpuix/native 0.11.0, @gpuix/native-darwin-arm64 0.11.0, from npm.")
+    expect(all).not.toContain("GPUIX")
+  })
+
+  test("NSH lists its version, commit and source", () => {
+    const withNsh = renderEnvironment({ ...env, args: { ...env.args, apps: ["ghia", "nsh"] }, apps: appInfos(["ghia", "nsh"]) })
+    expect(withNsh).toContain("- NSH 0.4.0, commit e626a8d, from homebrew.")
+    expect(all).not.toContain("NSH 0.4.0")
+  })
+
   test("names when and from which bench commit each bundle was built", () => {
     expect(all).toContain("Electron 2026-11-06T01:00:00.000Z at bench aaaaaaa")
     expect(all).toContain("MyGo 2026-11-06T01:04:00.000Z at bench aaaaaaa")

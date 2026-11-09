@@ -20,6 +20,10 @@ export const STAMPS: { [A in AppId]: BuildStamp<A> } = {
       dirty: false, source: "https://github.com/fdarian/ghia.git", bun: "1.4.4-canary.1+b1305ddc7", aot: true,
     },
   },
+  gpuix: {
+    app: "gpuix", builtAt: "2026-11-06T01:01:30.000Z", bench: { sha: "aaaaaaa1111111111111111111111111111111aa", dirty: false },
+    versions: { solid: "0.11.0", native: "0.11.0", addon: "0.11.0", source: "npm" },
+  },
   gpui: {
     app: "gpui", builtAt: "2026-11-06T01:02:00.000Z", bench: { sha: "aaaaaaa1111111111111111111111111111111aa", dirty: false },
     versions: { git: "https://github.com/zed-industries/zed", commit: "654efae441bc8eb117d0042bb28cd7cf3570bdc9", rustc: "rustc 1.97.1 (abcdef 2026-09-01)" },
@@ -27,6 +31,10 @@ export const STAMPS: { [A in AppId]: BuildStamp<A> } = {
   swiftui: {
     app: "swiftui", builtAt: "2026-11-06T01:03:00.000Z", bench: { sha: "aaaaaaa1111111111111111111111111111111aa", dirty: false },
     versions: { swift: "6.4.2", xcode: "27.2", xcodeBuild: "27B52", sdk: "27.0" },
+  },
+  nsh: {
+    app: "nsh", builtAt: "2026-11-06T01:05:00.000Z", bench: { sha: "aaaaaaa1111111111111111111111111111111aa", dirty: false },
+    versions: { nsh: "0.4.0", commit: "e626a8d", source: "homebrew" },
   },
   mygo: {
     app: "mygo", builtAt: "2026-11-06T01:04:00.000Z", bench: { sha: "aaaaaaa1111111111111111111111111111111aa", dirty: false },

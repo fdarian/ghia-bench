@@ -14,7 +14,7 @@ async function psList(): Promise<ProcessEntry[]> {
   })
 }
 
-/** Any process whose executable is named Mailbox-*: the three apps and Electron's helpers. */
+/** Any process whose executable is named Mailbox-*: the apps and Electron's helpers. */
 export async function runningMailboxProcesses(): Promise<ProcessEntry[]> {
   return (await psList()).filter((entry) => basename(entry.command).startsWith("Mailbox-"))
 }

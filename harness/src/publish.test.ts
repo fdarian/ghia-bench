@@ -57,6 +57,16 @@ describe("environmentLine", () => {
     expect(line).toContain("Ghia 8fcd806 (zed 451f7ec, Bun 1.4.4+38afee6c8), Ghia AOT 8fcd806 (zed 451f7ec, Bun 1.4.4-canary.1+b1305ddc7, AOT), Bun")
   })
 
+  test("GPUIX appears with its @gpuix/solid version when it is in the run", () => {
+    const line = environmentLine({ ...env, args: { ...env.args, apps: ["ghia", "gpuix"] }, apps: appInfos(["ghia", "gpuix"]) })
+    expect(line).toContain("Ghia 8fcd806 (zed 451f7ec, Bun 1.4.4+38afee6c8), GPUIX 0.11.0 (npm), Bun")
+  })
+
+  test("NSH appears with its version, commit and source when it is in the run", () => {
+    const line = environmentLine({ ...env, args: { ...env.args, apps: ["ghia", "nsh"] }, apps: appInfos(["ghia", "nsh"]) })
+    expect(line).toContain("Ghia 8fcd806 (zed 451f7ec, Bun 1.4.4+38afee6c8), NSH 0.4.0 (e626a8d, homebrew), Bun")
+  })
+
   test("a dirty Ghia tree is marked", () => {
     const ghia = { ...env.apps.ghia!, build: { ...STAMPS.ghia, versions: { ...STAMPS.ghia.versions, dirty: true } } }
     expect(environmentLine({ ...env, apps: { ...env.apps, ghia } })).toContain("Ghia 8fcd806+dirty (zed 451f7ec, Bun 1.4.4+38afee6c8),")

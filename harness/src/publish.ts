@@ -58,6 +58,7 @@ export function environmentLine(env: Env): string {
   const versions: string[] = []
   if (apps.includes("ghia")) versions.push(`Ghia ${ghiaVersion(buildOf(env, "ghia"))}`)
   if (apps.includes("ghia-aot")) versions.push(`Ghia AOT ${ghiaVersion(buildOf(env, "ghia-aot"))}`)
+  if (apps.includes("gpuix")) versions.push(`GPUIX ${buildOf(env, "gpuix").versions.solid} (npm)`)
   if (apps.includes("gpui")) versions.push(`gpui ${buildOf(env, "gpui").versions.commit.slice(0, 7)}`)
   if (apps.includes("electron")) {
     const electron = buildOf(env, "electron").versions
@@ -67,6 +68,10 @@ export function environmentLine(env: Env): string {
   if (apps.includes("swiftui")) {
     const swift = buildOf(env, "swiftui").versions
     versions.push(`Swift ${swift.swift}`, `Xcode ${swift.xcode}`)
+  }
+  if (apps.includes("nsh")) {
+    const nsh = buildOf(env, "nsh").versions
+    versions.push(`NSH ${nsh.nsh} (${nsh.commit}, ${nsh.source})`)
   }
   versions.push(`Bun ${env.bun}`)
   return `${runDate(env)}. ${machine.join(", ")}. ${versions.join(", ")}.`

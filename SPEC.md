@@ -1,6 +1,6 @@
 # Mailbox app spec
 
-Contract that all six apps (Electron, Ghia, Ghia compiled with Bun AOT, raw GPUI, SwiftUI, MyGo) implement. Apps contain no benchmark code; all measurement is external.
+Contract that all eight apps (Electron, Ghia, Ghia compiled with Bun AOT, GPUIX, raw GPUI, SwiftUI, NSH, MyGo) implement. Apps contain no benchmark code; all measurement is external.
 
 Light theme only. System UI font (SF Pro) everywhere: CSS `system-ui`, gpui `.SystemUIFont`, Ghia default.
 
@@ -10,7 +10,7 @@ Content area 1280x800 pt (excluding a standard macOS title bar), top-left of the
 
 ## Data
 
-At startup the app reads `messages.json` from its bundle Resources and parses it (Electron: renderer `fetch('./messages.json')` relative to index.html; Ghia: read + `JSON.parse`; GPUI: `serde_json`). 10,000 messages, newest first. Each message has:
+At startup the app reads `messages.json` from its bundle Resources and parses it (Electron: renderer `fetch('./messages.json')` relative to index.html; Ghia: read + `JSON.parse`; GPUI: `serde_json`; NSH: `fetch("asset:/messages.json")` + `JSON.parse`). 10,000 messages, newest first. Each message has:
 
 - `id`
 - `fromName`
@@ -66,7 +66,7 @@ Bg #FFFFFF, 1px right border #E4E4E7.
   - Unread: 8px circle #2563EB centred at row (8, 21).
   - Avatar: 36px circle at (16, 12), bg = AVATAR[hash(fromName) % 8], initials (first letter of first two words) 13px semibold #FFFFFF centred.
     - AVATAR = #F87171 #FB923C #FBBF24 #34D399 #22D3EE #60A5FA #A78BFA #F472B6.
-    - hash = sum of UTF-16 code units of fromName (simple, identical in all six).
+    - hash = sum of UTF-16 code units of fromName (simple, identical in all eight).
   - Text column from x 64 to row width - 16:
     - line 1 y 12-30: fromName 13px, semibold #18181B if unread else medium #3F3F46; time 12px #71717A right-aligned.
     - line 2 y 30-48: subject 13px #27272A, one line, ellipsis.
@@ -86,7 +86,7 @@ Bg #FFFFFF, vertical scroll, padding 32 all sides.
 
 ### Scrollbars
 
-Both scroll areas (the list and the detail pane) show an overlay scrollbar on their right edge while scrolling and for about 1 s after the last scroll, then hide it. Use the framework's own scrollbar where it has one (Chromium, Ghia, SwiftUI, MyGo). Raw GPUI has none built in, so the app draws one the way Zed does: a 6px-wide rounded thumb, #000000 at 35% opacity, inset 2px from the right edge, height proportional to viewport/content (at least 25px, as in Zed), shown on scroll and hidden by a timer 1 s after the last scroll.
+Both scroll areas (the list and the detail pane) show an overlay scrollbar on their right edge while scrolling and for about 1 s after the last scroll, then hide it. Use the framework's own scrollbar where it has one (Chromium, Ghia, SwiftUI, MyGo; GPUIX's is always visible, see Parity notes). Raw GPUI has none built in, so the app draws one the way Zed does: a 6px-wide rounded thumb, #000000 at 35% opacity, inset 2px from the right edge, height proportional to viewport/content (at least 25px, as in Zed), shown on scroll and hidden by a timer 1 s after the last scroll. NSH draws its own overlay indicator, which follows System Settings > "Show scroll bars" like the native apps (see Parity notes).
 
 ## Behaviour
 
@@ -104,7 +104,16 @@ Both scroll areas (the list and the detail pane) show an overlay scrollbar on th
 - Ghia: `letter-spacing: 0.5` on "LABELS" is not applied: `letterSpacing` is not in Ghia's `StyleDesc` for HTML text (only SVG text has it), so the heading is drawn without tracking (a few px narrower).
 - Ghia: `<virtual-list>` runs in `itemCount` mode (documented windowing): 60 rows are mounted around `onVisibleRange.startIndex` (native builds viewport + 512 px overdraw, about 24 rows). `scrollToItem` top-aligns a row, so selection-into-view uses `scrollTo` against the fixed 72 px rows to get the SPEC's minimal scroll.
 - Ghia (bun AOT): the same source as Ghia, built by `apps/ghia/build-aot.sh` with `compile.aot` on a canary Bun; the stamp records that Bun's revision and `aot`. The Ghia stamp records its Bun revision too.
+- GPUIX: the app is Ghia's code ported to upstream gpuix as published on npm (`@gpuix/solid`, `@gpuix/native` and the prebuilt `@gpuix/native-darwin-arm64`, all 0.11.0; no source build), and 0.11.0 forces these deviations:
+  - `render()` takes no window position or appearance, so the app places the window's top-left at (100, 100) and sets Aqua appearance itself through libobjc (`bun:ffi`, `apps/gpuix/src/window.ts`) right after `render()`.
+  - Key names are GPUI's (`down`, `up`, `escape`), not DOM's.
+  - Scrolling goes through the native renderer (`scrollTo`, `getListScrollTop`), since `HostElement` has no scroll methods.
+  - The detail pane's 32 px padding sits on an inner wrapper, not on the scroller, because 0.11.0 adds a scroller's own padding to its scroll extent.
+  - Scrollbar thumbs (list and detail, 6 px, `rgba(0, 0, 0, 0.35)`) are always visible: 0.11.0 paints the thumb permanently once `scrollbarColor` is set, with no show-on-scroll or 1 s hide timer.
+  - The input caret colour (#18181B) is set through the `theme` prop.
+  - The search border uses `focusVisible`, which gpuix applies after keyboard input and never on a mouse press, so the #2563EB focused border may not show on launch.
 - GPUI: `letter-spacing: 0.5` on "LABELS" is not applied: gpui's `TextStyle` has no letter spacing, so the heading is drawn without tracking.
+- GPUI: after opening its window the app turns on `acceptsMouseMovedEvents` (libobjc calls, `accept_mouse_moved_events` in `apps/gpui/src/main.rs`). Upstream gpui leaves it off on a normal window and takes hover from an `NSTrackingArea`, which the harness's `CGEventPostToPid` mouse moves do not feed; without it AppKit drops the posted moves and the app never computes hover during the hover phase. A real pointer needs no such call.
 - GPUI: SPEC gives no line heights for the sender column, so the app uses 18 (13px lines), 16 (12px lines), 20/20 (sender name 14px / email 13px, column centred in the 40px row), and 16 (`dateLong`, top-aligned). Other apps should match these where they differ from their defaults.
 - MyGo: native UI (package `ui`, `ui.List` virtualized, `ui.TextInputBase`, `ListState.ScrollTo`/`ScrollIntoView`). The input's caret is MyGo's own: 1 DIP wide, blinks 530 ms on / 530 ms off (not 500/500), and is visible from every edit or caret move but starts blinking 530 ms later (no separate 500 ms solid hold); its colour is the theme accent, set to #18181B. The window theme is forced light.
 - MyGo: `letter-spacing: 0.5` on "LABELS" is applied (`LetterSpacing`). Line heights follow the GPUI note (`FixedLineHeight`).
@@ -116,3 +125,12 @@ Both scroll areas (the list and the detail pane) show an overlay scrollbar on th
 - SwiftUI: the caret is the native NSTextField insertion point (1 pt wide, system blink); its period was not measured and its tint is set to #18181B with `.tint`.
 - SwiftUI: the search text starts 1 pt further right (`padding(.leading, 11)`) to land where the other apps put it, because with symmetric 10 pt padding a plain `TextField` text landed 1 pt left of the Electron reference.
 - SwiftUI: the type-phase cost is about 85% Swift's `String.contains` (grapheme-aware, Foundation-backed) in the filter, not SwiftUI rendering; the other apps' standard substring searches are byte-level. The app keeps the idiomatic call.
+- NSH: the app is TSX on nsh 0.4.0 (Longbridge's Rust UI framework, with its bundled QuickJS engine), rendered with native AppKit views in a single process. Its deviations from the spec:
+  - Window: NSH opens the window at its default 1200x800 centred; the app calls `Window.setFrame` to put the frame's top-left at (100, 100) with a 1280x828 frame (28 pt title bar), so the first layout is at the default 1200x800 and the next one at 1280x800.
+  - Executable: `nsh package` names it `MailboxNSH`; `build.sh` renames it `Mailbox-NSH`, updates `CFBundleExecutable`, then re-signs the bundle.
+  - Data: `messages.json` ships at `Contents/Resources/nsh/assets/messages.json` and is read with `fetch("asset:/messages.json")` before `mount`, so the first frame waits for the load.
+  - Caret: the native `NSTextField` caret with the system blink; the 500 ms solid hold is not implemented.
+  - Thousands separators use a regex because QuickJS has no `Intl`; the output is identical.
+  - Hover: rows use `hoverStyle`, and the selected row's `hoverStyle` is the selected colour, so selection wins.
+  - List: NSH's recycling `List` (layer-backed, not `NSTableView`), with `estimatedItemSize` 72 and fixed 72-tall rows; ArrowUp/Down scroll is computed from the tracked scroll offset.
+  - Keys: bound with `keymap.bind(..., { when: "always" })`, so the search field never sees ArrowUp/Down/Escape.

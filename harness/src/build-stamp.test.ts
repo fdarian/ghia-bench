@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import { changedPaths, goVersion, gpuiSource, mygoVersion, swiftVersion, xcodeVersion } from "./build-stamp"
+import { changedPaths, goVersion, gpuiSource, mygoVersion, nshVersion, swiftVersion, xcodeVersion } from "./build-stamp"
 
 describe("mygoVersion", () => {
   test("reads the egoist/mygo requirement in block or single-line form", () => {
@@ -30,7 +30,11 @@ describe("tool version parsers", () => {
     expect(xcodeVersion("Xcode 27.2\nBuild version 27B52")).toEqual({ xcode: "27.2", xcodeBuild: "27B52" })
     expect(goVersion("go version go1.27.3 darwin/arm64")).toBe("1.27.3")
   })
+  test("nsh's version and commit", () => {
+    expect(nshVersion("nsh 0.4.0 (e626a8d)")).toEqual({ nsh: "0.4.0", commit: "e626a8d" })
+  })
   test("unexpected output is an error", () => {
+    expect(() => nshVersion("nsh: command not found")).toThrow()
     expect(() => swiftVersion("swift: command not found")).toThrow()
     expect(() => xcodeVersion("xcode-select: error")).toThrow()
     expect(() => goVersion("")).toThrow()
