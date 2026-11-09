@@ -1,13 +1,17 @@
 /**
- * Builds `<repo>/dist/Mailbox-Ghia.app`: one compiled Bun binary (Solid plugin, native addon
- * embedded) plus messages.json in Contents/Resources. build.sh stamps and signs it.
+ * Builds `<repo>/dist/Mailbox-Ghia.app`: one compiled Bun binary (native addon embedded) plus
+ * messages.json in Contents/Resources. build.sh stamps and signs it.
+ *
+ * Ghia's own `build()` (Vite, `vite.config.mts`) bundles the app to `dist/main.js`; that bundle is
+ * compiled here, with the options `ghia build` uses for its binary (bytecode, minify) and the
+ * output placed in the app bundle. `ghia build` itself would write `dist/app`.
  *
  * With `--aot` it builds `Mailbox-GhiaAOT.app` from the same sources, compiled ahead of time to
  * machine code (a Bun with `compile.aot`); build-aot.sh stamps and signs it.
  */
 import { cpSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import solidPlugin from '@ghia/solid/bun-plugin'
+import { build } from 'ghia'
 import { nativeCjsPlugin } from './native-cjs-plugin'
 
 process.env.NODE_ENV = 'production'
@@ -23,12 +27,15 @@ rmSync(app, { recursive: true, force: true })
 mkdirSync(join(app, 'Contents/MacOS'), { recursive: true })
 mkdirSync(join(app, 'Contents/Resources'), { recursive: true })
 
+await build({ root, compile: false })
+
 const result = await Bun.build({
-  entrypoints: [join(root, 'src/main.tsx')],
+  entrypoints: [join(root, 'dist/main.js')],
   compile: aot ? { outfile: binary, autoloadBunfig: false, aot: true } : { outfile: binary, autoloadBunfig: false },
-  plugins: [solidPlugin, nativeCjsPlugin],
+  plugins: [nativeCjsPlugin],
+  format: 'esm',
+  bytecode: true,
   minify: true,
-  define: { 'process.env.NODE_ENV': '"production"' },
 })
 for (const log of result.logs) console.log(log)
 if (!result.success) throw new Error('Bun.build failed')
