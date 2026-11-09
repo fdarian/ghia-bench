@@ -11,7 +11,9 @@ repo_root="$(cd ../.. && pwd)"
   || { echo "vendor/ghia is not built: run scripts/setup-ghia.sh" >&2; exit 1; }
 bun install --frozen-lockfile
 app="$repo_root/dist/Mailbox-Ghia.app"
-NODE_ENV=production bun build.ts
+rm -rf "$app"
+NODE_ENV=production bun run ghia build
+bun build.ts
 bun "$repo_root/harness/src/build-stamp.ts" ghia "$app"
 codesign --force --sign - "$app"
 echo "$app"

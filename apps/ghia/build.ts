@@ -1,33 +1,16 @@
 /**
- * Builds `<repo>/dist/Mailbox-Ghia.app`: one compiled Bun binary (Solid plugin, native addon
- * embedded) plus messages.json in Contents/Resources. build.sh stamps and signs it.
+ * Packages the executable `ghia build` compiled into `<repo>/dist/Mailbox-Ghia.app`: messages.json
+ * in Contents/Resources and the Info.plist. build.sh runs `ghia build` first, then stamps and signs.
  */
-import { cpSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
+import { cpSync, existsSync, mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import solidPlugin from '@ghia/solid/bun-plugin'
-import { nativeCjsPlugin } from './native-cjs-plugin'
-
-process.env.NODE_ENV = 'production'
 
 const NAME = 'Mailbox-Ghia'
-const root = import.meta.dir
-const repo = join(root, '../..')
+const repo = join(import.meta.dir, '../..')
 const app = join(repo, 'dist', `${NAME}.app`)
-const binary = join(app, 'Contents/MacOS', NAME)
 
-rmSync(app, { recursive: true, force: true })
-mkdirSync(join(app, 'Contents/MacOS'), { recursive: true })
+if (!existsSync(join(app, 'Contents/MacOS', NAME))) throw new Error('ghia build did not write the executable')
 mkdirSync(join(app, 'Contents/Resources'), { recursive: true })
-
-const result = await Bun.build({
-  entrypoints: [join(root, 'src/main.tsx')],
-  compile: { outfile: binary, autoloadBunfig: false },
-  plugins: [solidPlugin, nativeCjsPlugin],
-  minify: true,
-  define: { 'process.env.NODE_ENV': '"production"' },
-})
-for (const log of result.logs) console.log(log)
-if (!result.success) throw new Error('Bun.build failed')
 
 cpSync(join(repo, 'data/messages.json'), join(app, 'Contents/Resources/messages.json'))
 

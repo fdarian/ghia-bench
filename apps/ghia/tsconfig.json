@@ -8,7 +8,7 @@
     "strict": true,
     "skipLibCheck": true,
     "noEmit": true,
-    "types": ["bun"]
+    "types": ["bun", "vite/client"]
   },
-  "include": ["src", "build.ts", "native-cjs-plugin.ts"]
+  "include": ["src", "build.ts", "vite.config.mts"]
 }
