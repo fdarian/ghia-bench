@@ -139,8 +139,9 @@ Run from a **foreground terminal window** on the main display, started by you: a
 
 ```
 bun harness/src/bench.ts check
-bun harness/src/bench.ts run [--apps electron,ghia,gpuix,gpui,swiftui,nsh,mygo] [--rounds 5] [--launches 10] [--capture auto|on|off] [--allow-missing-permissions] [--out results/<ISO>]
-bun harness/src/bench.ts report <results dir> [--include-invalid]
+bun harness/src/bench.ts plan [--apps ...] [--fresh ghia,gpui|all]
+bun harness/src/bench.ts run [--apps electron,ghia,gpuix,gpui,swiftui,nsh,mygo] [--fresh ghia,gpui|all] [--tag name] [--rounds 5] [--launches 10] [--capture auto|on|off] [--allow-missing-permissions] [--out <dir>]
+bun harness/src/bench.ts report [<run dir>] [--include-invalid]
 bun test harness/src
 ```
 
@@ -148,9 +149,27 @@ bun test harness/src
 
 - `check` prints what is measurable right now and why not (permissions), the load average, the display and its refresh rate, any running `Mailbox-*` process, and which bundles exist in `dist/`. Run it first.
 - `run` does `--launches` startup-only launches per app (the first is discarded: launch, wait for the window to stop moving, +1 s, quit), then `--rounds` full sessions per app (launch, settle 3 s, window check, idle 10 s, scroll, hover, type, navigate, settle 2 s, memory sample, quit). App order is rotated every launch and round. `--capture auto` captures frames only when Screen Recording is granted, `on` forces an attempt, `off` never captures and needs only Accessibility. Quitting is SIGTERM to the app's root pid, then SIGKILL of any still-running pid of the tree it sampled after 3 s; nothing else is ever signalled. Ctrl-C quits the app under test and stops. The run writes `report.md` at the end.
-- `report` regenerates `report.md` from `runs.jsonl` and `env.json`. Sessions whose window was not active or was covered are left out of the frame and latency numbers; `--include-invalid` puts them back.
+- `run` measures only what changed. Each app's version key (below) is worked out from its bundle's build stamp; an app with a clean stored run of the same key is re-used, not measured. `--fresh <apps>` (or `all`) measures them anyway. `plan` prints what a run would measure or re-use, and why, without running anything. `--out <dir>` is experiment mode: every app is measured into that one folder and the store is left alone, for A/B runs the key can't tell apart (an environment variable, a local patch).
+- `report` regenerates `report.md` from `runs.jsonl` and `env.json`. With no folder it writes `results/comparison.md`: the newest clean run of every app on the newest run's machine setup, with a Sources table naming the version, key, run, date and load of each app's numbers. Sessions whose window was not active or was covered are left out of the frame and latency numbers; `--include-invalid` puts them back.
 
-### Output (`results/<timestamp>/`, gitignored)
+### Output (`results/`, gitignored), stored per app and version
+
+```
+results/<app>/<version>-<key>/version.json        what the key is made of
+results/<app>/<version>-<key>/<run id>/env.json   that run's environment, with this app's bundle
+results/<app>/<version>-<key>/<run id>/runs.jsonl this app's records
+results/<app>/<version>-<key>/<run id>/report.md
+results/comparison.md                             newest clean run of every app
+```
+
+A run that measures several apps interleaves them as before and writes one run folder under each, with the same run id (`env.json` `sitting` lists them). The key is a hash of:
+
+- the **upstream versions** from the bundle's stamp (Electron and Chromium; the gpui commit and rustc; @gpuix packages; Swift, Xcode build and SDK; nsh; go and mygo; the Ghia and zed commits);
+- the **app code**: the git tree of `apps/<app>/` the bundle was built from, uncommitted files and lockfiles included, recorded in the stamp at build time;
+- the **measurement code**: the helper's Swift sources, `procs.ts`, `helper.ts`, `data/generate.ts`, and `SESSION_REVISION` in `harness/src/keys.ts`, which must be bumped by hand when `run.ts` changes how a session or launch is driven;
+- the **machine setup**: chip, macOS build, display size, scale and refresh rate, the scroll-bar setting, and whether capture was on.
+
+A build whose code can't be identified (a dirty Ghia tree, or a stamp from before code hashes with a dirty bench tree) is stored with a `-dirty` or plain label but never re-used. A run is re-used only when it is clean: it finished every launch and session, input ran, at most one session failed or lost focus, and its median load was under 10. The flat per-run folders from before 2026-11-10 were split into this layout; the originals are in `results/_flat/`.
 
 - `env.json`: the permission probe, macOS, chip, RAM, display and refresh rate, load average, Bun version, each app's build stamp (below), bundle sizes (`du -sk`) and executable sizes, the run arguments, what capture and input were enabled and why, and any warnings.
 - `runs.jsonl`: one JSON line per launch or session, appended as it finishes. Everything the helper printed is kept raw (mach-ns timestamps, rusage samples per process, every input, every captured frame with the regions that changed), plus load average before and after, the window check (`appActive`, `coveredFraction`, `coveredBy`), per-phase status (`ok`, `skipped` with the reason, or `error`) and how the app quit. All metrics are derived from it at report time, so analysis changes never need a re-run.
@@ -188,5 +207,5 @@ apps/mygo/           Go module on MyGo's native ui package
 harness/helper/      Swift CLI: launch timing, process metrics, input, frame capture
 harness/src/         Bun orchestrator: rounds, stats, report
 dist/                packaged apps (gitignored)
-results/             per-run output (gitignored)
+results/             per-app, per-version output (gitignored)
 ```

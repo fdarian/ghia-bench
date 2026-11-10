@@ -6,6 +6,7 @@
 import { readFileSync } from "node:fs"
 import { join } from "node:path"
 import { appSpec } from "./apps"
+import { appCodeTree } from "./keys"
 import { exec } from "./env"
 import { REPO_ROOT } from "./helper"
 import { readStamp, writeStamp, type BuildStamp, type StampVersions } from "./stamp"
@@ -139,7 +140,7 @@ async function electronVersions(bundle: string): Promise<StampVersions["electron
 }
 
 export async function stampBundle(app: AppId, bundle: string): Promise<BuildStamp> {
-  const common = { builtAt: new Date().toISOString(), bench: await gitState(REPO_ROOT) }
+  const common = { builtAt: new Date().toISOString(), bench: await gitState(REPO_ROOT), code: { tree: await appCodeTree(REPO_ROOT, app) } }
   switch (app) {
     case "ghia": return { app, ...common, versions: await ghiaVersions() }
     case "gpuix": return { app, ...common, versions: await gpuixVersions() }

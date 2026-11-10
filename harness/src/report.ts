@@ -393,11 +393,13 @@ function builtLine(stamp: BuildStamp): string {
 
 export function renderEnvironment(env: Env): string {
   const lines = [
-    `Run started ${env.startedAt}; apps ${env.args.apps.join(", ")}; ${env.args.launches} startup launches and ${env.args.rounds} sessions per app.`,
+    env.sources
+      ? `Composed from per-app runs (see Sources); machine fields below are from the newest, ${env.startedAt}.`
+      : `Run started ${env.startedAt}; apps ${env.args.apps.join(", ")}; ${env.args.launches} startup launches and ${env.args.rounds} sessions per app.`,
     `macOS ${env.macos}, ${env.chip} (${env.cpuCores} cores), ${(env.memBytes / 2 ** 30).toFixed(0)} GiB RAM.`,
     `Scroll bars (System Settings): ${env.scrollBars ?? "unknown"}${env.scrollBars === "unset" ? " (Automatic)" : ""}.`,
     `Main display ${env.display.widthPt} x ${env.display.heightPt} pt, scale ${env.display.scale}, ${env.display.refreshHz} Hz.`,
-    `Load average (1/5/15 min) at start: ${env.loadAverage.map((value) => value.toFixed(2)).join(" / ")}.`,
+    ...(env.sources ? [] : [`Load average (1/5/15 min) at start: ${env.loadAverage.map((value) => value.toFixed(2)).join(" / ")}.`]),
     ...(env.args.apps.includes("ghia") ? [ghiaLine(buildOf(env, "ghia"))] : []),
     ...(env.args.apps.includes("gpuix") ? [gpuixLine(buildOf(env, "gpuix"))] : []),
     ...(env.args.apps.includes("gpui") ? [gpuiLine(buildOf(env, "gpui"))] : []),
@@ -623,10 +625,25 @@ const METHOD_NOTES = [
   "Echo latency = first frame after a keyDown in which the search box changed; result latency = first frame in which the list or the count changed; only frames before the next keyDown count, otherwise the key has no visible change. Detail latency (navigate) uses the detail pane the same way. Long frames are intervals over 1.5 x the refresh interval.",
 ]
 
+/** Where each app's numbers come from, for a comparison composed from per-app runs. */
+export function renderSources(env: Env): string {
+  const sources = env.sources ?? {}
+  const rows = APP_IDS.filter((app) => sources[app]).map((app) => {
+    const source = sources[app]!
+    return [
+      APP_LABELS[app], source.version, source.key, source.runId, source.startedAt.slice(0, 16).replace("T", " ") + "Z",
+      source.load === null ? "–" : source.load.toFixed(1), source.reused === undefined ? "–" : source.reused ? "re-used" : "measured",
+    ]
+  })
+  return plainTable(["App", "Version", "Key", "Run", "Measured (UTC)", "Median load", "This sitting"], rows)
+    + "\n\nEach app's numbers come from its newest clean run of that version (results/<app>/<version>-<key>/<run>/). Apps measured in different runs were measured at different times and loads."
+}
+
 export function buildReport(env: Env, records: RunRecord[], options: { includeInvalid: boolean }): string {
   const data = collect(env, records, options.includeInvalid)
   const parts = [
-    "# ghia-bench report",
+    env.sources ? "# ghia-bench comparison" : "# ghia-bench report",
+    ...(env.sources ? ["## Sources", renderSources(env)] : []),
     "## Environment",
     renderEnvironment(env),
     "## Summary",

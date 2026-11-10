@@ -21,6 +21,8 @@ export type BuildStamp<A extends AppId = AppId> = {
     builtAt: string
     bench: { sha: string; dirty: boolean }
     versions: StampVersions[App]
+    /** The git tree of apps/<app> as built, uncommitted files included. Absent in stamps written before 2026-11-10. */
+    code?: { tree: string }
   }
 }[A]
 
@@ -68,6 +70,8 @@ export function readStamp<A extends AppId>(app: A, bundle: string): BuildStamp<A
   if (typeof stamp.builtAt !== "string" || typeof bench?.sha !== "string" || typeof bench.dirty !== "boolean" || versions === undefined || versions === null) {
     throw invalid(app, bundle, `an incomplete ${STAMP_FILE} stamp`)
   }
+  const code = stamp.code as Record<string, unknown> | undefined
+  if (code !== undefined && (code === null || typeof code.tree !== "string")) throw invalid(app, bundle, `a ${STAMP_FILE} stamp with an invalid code`)
   const fields = FIELD_TYPES[app] as Record<string, string>
   for (const name of Object.keys(fields)) {
     if (typeof versions[name] !== fields[name]) throw invalid(app, bundle, `a ${STAMP_FILE} stamp with no valid ${name}`)

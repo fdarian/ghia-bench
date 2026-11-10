@@ -1,5 +1,7 @@
 import type { AppId } from "./apps"
+import type { VersionKey } from "./keys"
 import type { BuildStamp } from "./stamp"
+import type { Source } from "./store"
 export { APP_IDS, APP_LABELS } from "./apps"
 export type { AppId } from "./apps"
 
@@ -162,4 +164,10 @@ export type Env = {
   bun: string
   apps: Partial<Record<AppId, AppInfo>>
   warnings: string[]
+  /** The harness checkout at run time; absent before 2026-11-10. */
+  harness?: { sha: string; dirty: boolean; measure: string }
+  /** The bench sitting this per-app run was part of: its id and every app it measured. */
+  sitting?: { id: string; apps: AppId[] }
+  /** Set on a merged comparison only: where each app's numbers come from. */
+  sources?: Partial<Record<AppId, Source>>
 }
