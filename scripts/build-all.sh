@@ -15,6 +15,7 @@ cd "$root"
 
 "$root/apps/electron/build.sh"
 "$root/apps/ghia/build.sh"
+"$root/apps/ghia/build-aot.sh"
 "$root/apps/gpuix/build.sh"
 "$root/apps/gpui/build.sh"
 "$root/apps/swiftui/build.sh"
@@ -23,4 +24,4 @@ cd "$root"
 
 echo
 echo "dist/ bundle sizes:"
-du -sh dist/Mailbox-Electron.app dist/Mailbox-Ghia.app dist/Mailbox-GPUIX.app dist/Mailbox-GPUI.app dist/Mailbox-SwiftUI.app dist/Mailbox-NSH.app dist/Mailbox-MyGo.app
+du -sh dist/Mailbox-Electron.app dist/Mailbox-Ghia.app dist/Mailbox-GhiaAOT.app dist/Mailbox-GPUIX.app dist/Mailbox-GPUI.app dist/Mailbox-SwiftUI.app dist/Mailbox-NSH.app dist/Mailbox-MyGo.app

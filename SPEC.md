@@ -1,6 +1,6 @@
 # Mailbox app spec
 
-Contract that all seven apps (Electron, Ghia, GPUIX, raw GPUI, SwiftUI, NSH, MyGo) implement. Apps contain no benchmark code; all measurement is external.
+Contract that all eight apps (Electron, Ghia, Ghia compiled with Bun AOT, GPUIX, raw GPUI, SwiftUI, NSH, MyGo) implement. Apps contain no benchmark code; all measurement is external.
 
 Light theme only. System UI font (SF Pro) everywhere: CSS `system-ui`, gpui `.SystemUIFont`, Ghia default.
 
@@ -66,7 +66,7 @@ Bg #FFFFFF, 1px right border #E4E4E7.
   - Unread: 8px circle #2563EB centred at row (8, 21).
   - Avatar: 36px circle at (16, 12), bg = AVATAR[hash(fromName) % 8], initials (first letter of first two words) 13px semibold #FFFFFF centred.
     - AVATAR = #F87171 #FB923C #FBBF24 #34D399 #22D3EE #60A5FA #A78BFA #F472B6.
-    - hash = sum of UTF-16 code units of fromName (simple, identical in all seven).
+    - hash = sum of UTF-16 code units of fromName (simple, identical in all eight).
   - Text column from x 64 to row width - 16:
     - line 1 y 12-30: fromName 13px, semibold #18181B if unread else medium #3F3F46; time 12px #71717A right-aligned.
     - line 2 y 30-48: subject 13px #27272A, one line, ellipsis.
@@ -103,6 +103,7 @@ Both scroll areas (the list and the detail pane) show an overlay scrollbar on th
 - Electron: `fetch('./messages.json')` is async, so `ready-to-show` can fire before the list and detail are filled (a few ms later); the sidebar, search input and empty list column are painted first. `app.focus({ steal: true })` is requested per the spec, but macOS may still decline activation when the process is spawned from a background process (observed: another app stayed frontmost).
 - Ghia: `letter-spacing: 0.5` on "LABELS" is not applied: `letterSpacing` is not in Ghia's `StyleDesc` for HTML text (only SVG text has it), so the heading is drawn without tracking (a few px narrower).
 - Ghia: `<virtual-list>` runs in `itemCount` mode (documented windowing): 60 rows are mounted around `onVisibleRange.startIndex` (native builds viewport + 512 px overdraw, about 24 rows). `scrollToItem` top-aligns a row, so selection-into-view uses `scrollTo` against the fixed 72 px rows to get the SPEC's minimal scroll.
+- Ghia (bun AOT): the same source as Ghia, built by `apps/ghia/build-aot.sh` with `compile.aot` on a canary Bun; the stamp records that Bun's revision and `aot`. The Ghia stamp records its Bun revision too.
 - GPUIX: the app is Ghia's code ported to upstream gpuix as published on npm (`@gpuix/solid`, `@gpuix/native` and the prebuilt `@gpuix/native-darwin-arm64`, all 0.11.0; no source build), and 0.11.0 forces these deviations:
   - `render()` takes no window position or appearance, so the app places the window's top-left at (100, 100) and sets Aqua appearance itself through libobjc (`bun:ffi`, `apps/gpuix/src/window.ts`) right after `render()`.
   - Key names are GPUI's (`down`, `up`, `escape`), not DOM's.

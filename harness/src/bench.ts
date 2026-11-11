@@ -13,7 +13,7 @@ import { APP_IDS, type AppId } from "./types"
 const USAGE = `usage:
   bun harness/src/bench.ts check
   bun harness/src/bench.ts plan [--apps ...] [--fresh ghia,gpui|all] [--capture auto|on|off]
-  bun harness/src/bench.ts run [--apps electron,ghia,gpuix,gpui,swiftui,nsh,mygo] [--fresh ghia,gpui|all] [--tag name] [--rounds 5] [--launches 10] [--capture auto|on|off] [--allow-missing-permissions] [--results results] [--out <dir>]
+  bun harness/src/bench.ts run [--apps electron,ghia,ghia-aot,gpuix,gpui,swiftui,nsh,mygo] [--fresh ghia,gpui|all] [--tag name] [--rounds 5] [--launches 10] [--capture auto|on|off] [--allow-missing-permissions] [--results results] [--out <dir>]
       Measures only apps with no clean stored run of their version (or in --fresh) into results/<app>/<version>-<key>/<run id>/,
       then writes results/comparison.md. --out <dir> is experiment mode: measure every app into <dir> and leave the store alone.
   bun harness/src/bench.ts report [<run dir>] [--include-invalid]   (no dir: results/comparison.md, the newest clean run of every app)

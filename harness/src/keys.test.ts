@@ -74,6 +74,13 @@ describe("keys", () => {
     expect(versionKey(STAMPS.gpui, null, "m", MACHINE).unreusable).toMatch(/app code/)
   })
 
+  test("Ghia and Ghia AOT of the same build get different keys, and the Bun that compiled them is part of the key", () => {
+    const plain = versionKey(STAMPS.ghia, "tree", "m", MACHINE)
+    expect(versionKey(STAMPS["ghia-aot"], "tree", "m", MACHINE).key).not.toBe(plain.key)
+    const otherBun = { ...STAMPS.ghia, versions: { ...STAMPS.ghia.versions, bun: "1.9.9+abcdef0" } }
+    expect(versionKey(otherBun, "tree", "m", MACHINE).key).not.toBe(plain.key)
+  })
+
   test("the machine part is the chip, macOS, display, scroll bars and capture", () => {
     const env = {
       chip: "M1 Pro", macos: "27.0.1 (26A434)", scrollBars: "WhenScrolling", capture: { enabled: false, reason: "" },

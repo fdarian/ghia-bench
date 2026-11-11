@@ -10,5 +10,5 @@
     "noEmit": true,
     "types": ["bun", "vite/client"]
   },
-  "include": ["src", "build.ts", "vite.config.mts"]
+  "include": ["src", "build.ts", "native-cjs-plugin.ts", "vite.config.mts"]
 }

@@ -21,7 +21,7 @@ stamp="$dest/.setup-ghia-built"
 mkdir -p "$root/vendor"
 
 if [ -n "$GHIA_SRC" ]; then
-  [ -d "$GHIA_SRC/.git" ] || { echo "GHIA_SRC is not a git checkout: $GHIA_SRC" >&2; exit 1; }
+  [ -e "$GHIA_SRC/.git" ] || { echo "GHIA_SRC is not a git checkout: $GHIA_SRC" >&2; exit 1; }
   [ -d "$GHIA_SRC/zed" ] || { echo "no zed checkout at $GHIA_SRC/zed" >&2; exit 1; }
   git -C "$GHIA_SRC" cat-file -e "$GHIA_REV^{commit}" \
     || { echo "GHIA_REV $GHIA_REV is not in $GHIA_SRC" >&2; exit 1; }
@@ -77,6 +77,8 @@ else
   echo "$want" > "$stamp"
 fi
 
+# @ghia/solid imports the `ghia` package (Vite plugin), so its dist has to exist first.
+(cd "$dest/packages/ghia" && bun run build)
 (cd "$dest/packages/solid" && bun run build)
 [ -d "$dest/packages/solid/dist" ] || { echo "packages/solid/dist missing after build" >&2; exit 1; }
 

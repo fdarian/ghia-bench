@@ -27,8 +27,9 @@ export const MEASURE_PATHS = [
  */
 export const SESSION_REVISION = 1
 
+/** ghia-aot is the Ghia app's code built another way, so both read apps/ghia. */
 export function appCodePath(app: AppId): string {
-  return `apps/${app}`
+  return app === "ghia-aot" ? "apps/ghia" : `apps/${app}`
 }
 
 /**
@@ -117,7 +118,11 @@ export function upstreamOf(stamp: BuildStamp): { label: string; versions: Record
   switch (stamp.app) {
     case "ghia": {
       const v = stamp.versions
-      return { label: v.sha.slice(0, 8), versions: { native: v.native, solid: v.solid, sha: v.sha, zedSha: v.zedSha } }
+      return { label: v.sha.slice(0, 8), versions: { native: v.native, solid: v.solid, sha: v.sha, zedSha: v.zedSha, bun: v.bun } }
+    }
+    case "ghia-aot": {
+      const v = stamp.versions
+      return { label: v.sha.slice(0, 8), versions: { native: v.native, solid: v.solid, sha: v.sha, zedSha: v.zedSha, bun: v.bun, aot: v.aot } }
     }
     case "gpuix": {
       const v = stamp.versions
@@ -149,7 +154,7 @@ export function upstreamOf(stamp: BuildStamp): { label: string; versions: Record
 
 /** Which reason, if any, makes a stamped build impossible to identify by its code. */
 function dirtyReason(stamp: BuildStamp): string | null {
-  if (stamp.app === "ghia" && stamp.versions.dirty) return "the Ghia tree had uncommitted changes when it was built"
+  if ((stamp.app === "ghia" || stamp.app === "ghia-aot") && stamp.versions.dirty) return "the Ghia tree had uncommitted changes when it was built"
   return null
 }
 

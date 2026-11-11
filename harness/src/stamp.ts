@@ -1,11 +1,15 @@
 import { readFileSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
+import { appSpec } from "./apps"
 import type { AppId, Env } from "./types"
 
 export const STAMP_FILE = "bench-build.json"
 
+type GhiaVersions = { native: string; solid: string; sha: string; zedSha: string; dirty: boolean; source: string; bun: string }
+
 export type StampVersions = {
-  ghia: { native: string; solid: string; sha: string; zedSha: string; dirty: boolean; source: string }
+  ghia: GhiaVersions
+  "ghia-aot": GhiaVersions & { aot: boolean }
   gpuix: { solid: string; native: string; addon: string; source: string }
   gpui: { git: string; commit: string; rustc: string }
   swiftui: { swift: string; xcode: string; xcodeBuild: string; sdk: string }
@@ -27,7 +31,8 @@ export type BuildStamp<A extends AppId = AppId> = {
 }[A]
 
 const FIELD_TYPES: { [A in AppId]: Record<keyof StampVersions[A], "string" | "boolean"> } = {
-  ghia: { native: "string", solid: "string", sha: "string", zedSha: "string", dirty: "boolean", source: "string" },
+  ghia: { native: "string", solid: "string", sha: "string", zedSha: "string", dirty: "boolean", source: "string", bun: "string" },
+  "ghia-aot": { native: "string", solid: "string", sha: "string", zedSha: "string", dirty: "boolean", source: "string", bun: "string", aot: "boolean" },
   gpuix: { solid: "string", native: "string", addon: "string", source: "string" },
   gpui: { git: "string", commit: "string", rustc: "string" },
   swiftui: { swift: "string", xcode: "string", xcodeBuild: "string", sdk: "string" },
@@ -46,7 +51,7 @@ export function writeStamp(bundle: string, stamp: BuildStamp): void {
 }
 
 function invalid(app: AppId, bundle: string, why: string): Error {
-  return new Error(`${bundle} has ${why}; rebuild ${app} with apps/${app}/build.sh`)
+  return new Error(`${bundle} has ${why}; rebuild ${app} with ${appSpec(app).buildScript}`)
 }
 
 export function readStamp<A extends AppId>(app: A, bundle: string): BuildStamp<A> {
