@@ -13,6 +13,7 @@ struct Status: Decodable {
     let done: Int
     let total: Int
     let startedAt: Double
+    let pid: Int32
     let finishAt: Double
     let error: String?
 }
@@ -46,6 +47,8 @@ final class Controller {
     var lastData: Data?
     var quitTimer: Timer?
     var shown = false
+    var benchExit: DispatchSourceProcess?
+    var watchedPid: Int32 = 0
 
     static func label(size: CGFloat, weight: NSFont.Weight, secondary: Bool) -> NSTextField {
         let field = NSTextField(wrappingLabelWithString: "")
@@ -121,6 +124,7 @@ final class Controller {
             let status = try JSONDecoder().decode(Status.self, from: data)
             lastData = data
             render(status)
+            if status.state == "running" { watchBench(status.pid) }
         } catch {
             FileHandle.standardError.write(Data("benchstatus: cannot decode \(path): \(error)\n".utf8))
         }
@@ -132,6 +136,33 @@ final class Controller {
         var text = "\(kind) \(status.index)/\(status.count) · \(app)"
         if let phase = status.phase { text += " · \(phase)" }
         return text
+    }
+
+    /// A bench killed outright (SIGKILL, crash) cannot write Stopped, so its exit is watched here.
+    func watchBench(_ pid: Int32) {
+        if pid == watchedPid { return }
+        benchExit?.cancel()
+        benchExit = nil
+        watchedPid = pid
+        let source = DispatchSource.makeProcessSource(identifier: pid, eventMask: .exit, queue: DispatchQueue.main)
+        source.setEventHandler { [weak self] in self?.benchExited(pid) }
+        source.resume()
+        benchExit = source
+        // The process may already be gone: signal 0 only checks that it exists.
+        if kill(pid, 0) != 0 && errno == ESRCH { benchExited(pid) }
+    }
+
+    func benchExited(_ pid: Int32) {
+        guard pid == watchedPid, let data = lastData, var status = try? JSONDecoder().decode(Status.self, from: data) else { return }
+        // The bench writes its own final state before exiting; only a "running" file means it died without doing so.
+        reload()
+        guard lastData == data, status.state == "running" else { return }
+        status = Status(
+            state: "stopped", stage: status.stage, app: status.app, index: status.index, count: status.count, phase: status.phase,
+            done: status.done, total: status.total, startedAt: status.startedAt, pid: status.pid,
+            finishAt: Date().timeIntervalSince1970 * 1000, error: "bench process exited"
+        )
+        render(status)
     }
 
     func render(_ status: Status) {

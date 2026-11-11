@@ -16,6 +16,8 @@ export type ProgressStatus = {
   done: number
   total: number
   startedAt: number
+  /** The bench process: the panel watches it, so a bench killed without a chance to write Stopped still shows as stopped. */
+  pid: number
   /** Epoch ms: the estimate while running, the moment it ended otherwise. */
   finishAt: number
   error?: string
@@ -53,6 +55,7 @@ export function writeAtomically(path: string, text: string): void {
 
 export type ProgressOptions = {
   path: string
+  pid: number
   /** Startup launches in all: measured apps x launches. */
   startupUnits: number
   /** Sessions in all: measured apps x rounds. */
@@ -145,6 +148,7 @@ export class ProgressFeed {
       done: startupDone + sessionDone,
       total: this.options.startupUnits + this.options.sessionUnits,
       startedAt: this.startedAt,
+      pid: this.options.pid,
       finishAt: this.endedAt ?? now + estimateRemainingMs({
         startupLeft: this.options.startupUnits - startupDone,
         sessionLeft: this.options.sessionUnits - sessionDone,

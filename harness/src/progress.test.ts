@@ -38,7 +38,7 @@ function harness(overrides: Partial<ProgressOptions> = {}): Harness {
   const writes: ProgressStatus[] = []
   const paths: string[] = []
   const feed = new ProgressFeed({
-    path: "/tmp/status.json", startupUnits: 4, sessionUnits: 2, launches: 2, rounds: 1, inputEnabled: true,
+    path: "/tmp/status.json", pid: 4242, startupUnits: 4, sessionUnits: 2, launches: 2, rounds: 1, inputEnabled: true,
     now: () => clock,
     write: (path, text) => { paths.push(path); writes.push(JSON.parse(text)) },
     ...overrides,
@@ -53,7 +53,7 @@ describe("ProgressFeed", () => {
     expect(paths).toEqual(["/tmp/status.json"])
     expect(writes[0]).toEqual({
       state: "running", stage: "startup", app: null, index: 0, count: 2, phase: null, done: 0, total: 6,
-      startedAt: 1_000_000, finishAt: 1_000_000 + 4 * STARTUP_UNIT_DEFAULT_MS + 2 * SESSION_UNIT_DEFAULT_MS,
+      startedAt: 1_000_000, pid: 4242, finishAt: 1_000_000 + 4 * STARTUP_UNIT_DEFAULT_MS + 2 * SESSION_UNIT_DEFAULT_MS,
     })
   })
 

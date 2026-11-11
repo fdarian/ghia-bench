@@ -323,6 +323,7 @@ async function measure(
 function startProgress(apps: AppId[], options: RunOptions, input: Env["input"]): void {
   const feed = new ProgressFeed({
     path: STATUS_PATH,
+    pid: process.pid,
     startupUnits: apps.length * options.launches,
     sessionUnits: apps.length * options.rounds,
     launches: options.launches,
