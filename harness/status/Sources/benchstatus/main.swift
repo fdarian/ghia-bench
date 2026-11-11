@@ -275,9 +275,19 @@ let statusPath = CommandLine.arguments[1]
 let lockDescriptor = open(statusPath + ".panel.lock", O_CREAT | O_RDWR, 0o644)
 if lockDescriptor < 0 || flock(lockDescriptor, LOCK_EX | LOCK_NB) != 0 { exit(0) }
 
+/// AppKit activates an app as it finishes launching, even an accessory one, and that would take focus from the terminal the
+/// bench runs in. A prohibited app cannot be activated, so it starts prohibited and becomes an accessory once launched.
+final class Delegate: NSObject, NSApplicationDelegate {
+    func applicationDidFinishLaunching(_ notification: Notification) {
+        NSApp.setActivationPolicy(.accessory)
+        watcher.start()
+    }
+}
+
 let application = NSApplication.shared
-application.setActivationPolicy(.accessory)
+application.setActivationPolicy(.prohibited)
+let delegate = Delegate()
+application.delegate = delegate
 let controller = Controller(path: statusPath)
 let watcher = FileWatcher(path: statusPath) { controller.reload() }
-watcher.start()
 application.run()
