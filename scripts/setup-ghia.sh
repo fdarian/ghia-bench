@@ -9,8 +9,8 @@
 set -euo pipefail
 
 GHIA_SRC="${GHIA_SRC:-}"
-GHIA_REV="${GHIA_REV:-8fcd806f5969c5eafc00ee1114ef7b66d8a2ca15}"
-ZED_REV="${ZED_REV:-451f7ec4d15f7d7444a1f347d5b916e2a7989bab}"
+GHIA_REV="${GHIA_REV:-4ea39d9c031255c072941afe388194802f05e67f}"
+ZED_REV="${ZED_REV:-59a0a038c85089511f63097a175305f808b9373a}"
 HEAVY="${GHIA_HEAVY:-}"
 
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -36,7 +36,7 @@ fi
 
 if [ -d "$dest/.git" ]; then
   git -C "$dest" remote set-url origin "$origin"
-  git -C "$dest" fetch --quiet origin '+refs/heads/*:refs/remotes/origin/*'
+  git -C "$dest" fetch --quiet --no-recurse-submodules origin '+refs/heads/*:refs/remotes/origin/*'
 else
   git clone --quiet --no-checkout ${clone_args[@]+"${clone_args[@]}"} "$origin" "$dest"
 fi
