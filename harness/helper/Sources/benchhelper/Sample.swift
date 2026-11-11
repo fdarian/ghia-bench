@@ -97,10 +97,12 @@ func sampleTree(root: pid_t) throws -> [String: Any] {
     let tNs = Mach.nowNs()
     var procs: [[String: Any]] = []
     var rootSeen = false
+    let gpuNsByPid = try Gpu.accumulatedNsByPid()
     for pid in [root] + ProcessTree.descendants(of: root) {
         // A child can exit between listing and reading; the root cannot.
         guard var entry = Rusage.read(pid: pid) else { continue }
         if pid == root { rootSeen = true }
+        entry["gpuNs"] = gpuNsByPid[pid] ?? 0
         entry["pid"] = Int(pid)
         entry["ppid"] = nullable(ProcessTree.parent(of: pid).map { Int($0) })
         entry["name"] = nullable(ProcessTree.name(of: pid))
