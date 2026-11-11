@@ -9,7 +9,7 @@
 set -euo pipefail
 
 GHIA_SRC="${GHIA_SRC:-}"
-GHIA_REV="${GHIA_REV:-4ea39d9c031255c072941afe388194802f05e67f}"
+GHIA_REV="${GHIA_REV:-8c3ad3d14c31b88d6d7da9685b21586cb6409f66}"
 ZED_REV="${ZED_REV:-59a0a038c85089511f63097a175305f808b9373a}"
 HEAVY="${GHIA_HEAVY:-}"
 
@@ -42,7 +42,8 @@ else
 fi
 git -C "$dest" cat-file -e "$GHIA_REV^{commit}" \
   || { echo "GHIA_REV $GHIA_REV is not in $origin" >&2; exit 1; }
-git -C "$dest" checkout --quiet --detach "$GHIA_REV"
+# --force: the native build rewrites the tracked packages/native/index.{js,cjs}, which would block the checkout.
+git -C "$dest" checkout --quiet --force --detach "$GHIA_REV"
 
 gitlink="$(git -C "$dest" rev-parse HEAD:zed)"
 if [ "$gitlink" != "$ZED_REV" ]; then
