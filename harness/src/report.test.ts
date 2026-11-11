@@ -8,7 +8,7 @@ const BASE = 1_000_000_000_000
 
 function proc(pid: number, name: string, cpuMs: number): Proc {
   return {
-    pid, ppid: 1, name, userNs: cpuMs * MS, sysNs: 0, instructions: cpuMs * 1000, cycles: cpuMs * 2000, energyNj: cpuMs * 1000,
+    pid, ppid: 1, name, userNs: cpuMs * MS, sysNs: 0, instructions: cpuMs * 1000, cycles: cpuMs * 2000, energyNj: cpuMs * 1000, gpuNs: cpuMs * MS / 2,
     idleWakeups: 0, interruptWakeups: cpuMs, footprint: 100 * 1024 * 1024, resident: 0,
   }
 }
@@ -156,6 +156,27 @@ describe("buildReport", () => {
     expect(report).toContain("| gpu |")
   })
 
+  test("GPU rows and the breakdown column report the sampled GPU time", () => {
+    const report = buildReport(env, [session(0, true)], { includeInvalid: false })
+    expect(report).toContain("| GPU (% of one GPU) | 5 |")
+    expect(report).toContain("| GPU time (ms) | 100 |")
+    expect(report).toContain("GPU % idle")
+  })
+
+  test("runs recorded without gpuNs show GPU as missing, not NaN or 0", () => {
+    const old = session(0, true)
+    for (const phaseResult of Object.values(old.phases)) {
+      if (phaseResult.status !== "ok") continue
+      for (const sampleOf of [phaseResult.data.rusageBefore, phaseResult.data.rusageAfter, phaseResult.data.rusageAfterTail]) {
+        for (const entry of sampleOf.procs) delete entry.gpuNs
+      }
+    }
+    const report = buildReport(env, [old], { includeInvalid: false })
+    expect(report).toContain("| GPU (% of one GPU) | – |")
+    expect(report).toContain("| GPU time (ms) | – |")
+    expect(report).not.toContain("NaN")
+  })
+
   test("includeInvalid brings the inactive session back", () => {
     const report = buildReport(env, records, { includeInvalid: true })
     expect(report).toContain("| Sessions (window active and uncovered / total) | 2 / 2 |")
@@ -175,6 +196,8 @@ describe("summaryMetrics", () => {
     expect(numbers("samples.sessions")).toEqual([1, 2])
     expect(numbers("type.resultNoChange")).toEqual([1, 2])
     expect(numbers("idle.cpuPct")).toEqual([10])
+    expect(numbers("idle.gpuPct")).toEqual([5])
+    expect(numbers("idle.gpuMs")).toEqual([100])
   })
 
   test("percentile cells list p50 then p95", () => {

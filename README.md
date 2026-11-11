@@ -94,6 +94,7 @@ The per-process breakdown and the validity notes are in [published/2026-11-05-no
 | Startup: content ready | Time until the first captured frame whose pixels match the spec's signature (sidebar, first-row avatar, detail text); needs Screen Recording |
 | Memory | `phys_footprint` from `proc_pid_rusage`, summed over the app's process tree, at the end of idle and after the workload |
 | Idle CPU, instructions, energy, wakeups | `proc_pid_rusage` diff over a 10 s idle phase, summed over the process tree; frames presented while idle |
+| GPU time | Accumulated GPU time of the accelerator user clients (`IOAccelerator` children in IOKit, `AppUsage`) each process in the tree owns, as a diff over the phase. The app's own submissions only; WindowServer's compositing is not attributed to the app, same as CPU |
 | Scroll and hover frame pacing | ScreenCaptureKit stream of the app window during 120 Hz wheel / pointer events: frames per second, interval p50/p95/p99, long frames |
 | Typing latency | OS event post to the first captured frame where the region changed: echo (search input) and result (list or count line) per key |
 | Navigation latency | Same method for ArrowDown, on the detail region |

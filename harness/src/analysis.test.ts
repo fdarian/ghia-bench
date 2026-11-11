@@ -10,7 +10,7 @@ const MS = 1e6
 
 function proc(pid: number, overrides: Partial<Proc> = {}): Proc {
   return {
-    pid, ppid: 1, name: "p", userNs: 0, sysNs: 0, instructions: 0, cycles: 0, energyNj: 0,
+    pid, ppid: 1, name: "p", userNs: 0, sysNs: 0, instructions: 0, cycles: 0, energyNj: 0, gpuNs: 0,
     idleWakeups: 0, interruptWakeups: 0, footprint: 0, resident: 0, ...overrides,
   }
 }
@@ -100,6 +100,35 @@ describe("diffUsage", () => {
     const after = sample(1e9, [proc(1, { energyNj: 4_000_000 }), proc(2, { energyNj: 500_000 })])
     expect(diffUsage(before, after).energyMj).toBeCloseTo(3.5)
     expect(diffUsage(sample(0, [proc(1, { energyNj: null })]), sample(1e9, [proc(1, { energyNj: null })])).energyMj).toBeNull()
+  })
+
+  test("gpu delta sums over the tree; a pid new in the phase counts from zero", () => {
+    const before = sample(0, [proc(1, { gpuNs: 100 * MS }), proc(2, { gpuNs: 0 })])
+    const after = sample(2e9, [proc(1, { gpuNs: 300 * MS }), proc(2, { gpuNs: 40 * MS }), proc(3, { gpuNs: 10 * MS })])
+    const usage = diffUsage(before, after)
+    expect(usage.gpuMs).toBeCloseTo(200 + 40 + 10)
+    expect(usage.gpuPct).toBeCloseTo((0.25 / 2) * 100)
+  })
+
+  test("a gpu counter that went backwards (closed user client) restarts from zero", () => {
+    const before = sample(0, [proc(1, { userNs: 10 * MS, gpuNs: 800 * MS })])
+    const after = sample(1e9, [proc(1, { userNs: 20 * MS, gpuNs: 30 * MS })])
+    const usage = diffUsage(before, after)
+    expect(usage.gpuMs).toBeCloseTo(30)
+    expect(usage.newProcesses).toBe(0)
+  })
+
+  test("gpu is null when any process in the after sample has no gpuNs (old runs)", () => {
+    const noGpu = (pid: number): Proc => {
+      const entry = proc(pid)
+      delete entry.gpuNs
+      return entry
+    }
+    const usage = diffUsage(sample(0, [noGpu(1)]), sample(1e9, [noGpu(1)]))
+    expect(usage.gpuMs).toBeNull()
+    expect(usage.gpuPct).toBeNull()
+    const mixed = diffUsage(sample(0, [proc(1)]), sample(1e9, [proc(1), noGpu(2)]))
+    expect(mixed.gpuMs).toBeNull()
   })
 
   test("groups split the same churn", () => {

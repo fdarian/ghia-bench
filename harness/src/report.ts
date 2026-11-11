@@ -150,6 +150,8 @@ function usageRows(data: AppData[], name: PhaseName): Row[] {
   const spec: { key: string; label: string; scale: number; pick: (phase: PhaseAnalysis) => number | null }[] = [
     { key: "cpuPct", label: "CPU (% of one core)", scale: 1, pick: (phase) => phase.usage.cpuPct },
     { key: "cpuMs", label: "CPU time (ms)", scale: 1, pick: (phase) => phase.usage.cpuMs },
+    { key: "gpuPct", label: "GPU (% of one GPU)", scale: 1, pick: (phase) => phase.usage.gpuPct },
+    { key: "gpuMs", label: "GPU time (ms)", scale: 1, pick: (phase) => phase.usage.gpuMs },
     { key: "instructionsM", label: "Instructions (millions)", scale: 1e6, pick: (phase) => phase.usage.instructions },
     { key: "cyclesM", label: "Cycles (millions)", scale: 1e6, pick: (phase) => phase.usage.cycles },
     { key: "energyMj", label: "Energy (mJ)", scale: 1, pick: (phase) => phase.usage.energyMj },
@@ -340,13 +342,20 @@ function renderBreakdown(app: AppData): string | null {
       const usage = phase.groups[group]
       return usage ? usage.cpuPct : null
     })))
-    return [group, footprint("idle"), footprint("workload"), ...phases.map(cpu)]
+    const gpu = (name: PhaseName) => medianRangeOf(present(app.sessions.map((session) => {
+      const phase = phaseOf(session, name)
+      if (!phase) return null
+      if (group === "total") return phase.usage.gpuPct
+      const usage = phase.groups[group]
+      return usage ? usage.gpuPct : null
+    })))
+    return [group, footprint("idle"), footprint("workload"), ...phases.map(cpu), ...phases.map(gpu)]
   })
   const groupNote = appSpec(app.app).chromium
     ? "main = the root pid; renderer, GPU and network come from the Chromium `--type` on the process command line (a plain `Helper` runs both GPU and network), other = any other utility or unclassified process."
     : "main = the root pid, helpers = every other process in the tree."
   return table(
-    ["Process group", "Footprint after idle (MiB)", "Footprint after workload (MiB)", ...phases.map((name) => `CPU % ${name}`)],
+    ["Process group", "Footprint after idle (MiB)", "Footprint after workload (MiB)", ...phases.map((name) => `CPU % ${name}`), ...phases.map((name) => `GPU % ${name}`)],
     rows,
   ) + `\n\nMedian [min–max] across sessions. Groups: ${groupNote} A group that did not exist in a session is left out of that median; footprints are \`phys_footprint\`, which can double-count shared pages across processes.`
 }
@@ -625,6 +634,7 @@ const METHOD_NOTES = [
   "Every metric is lower is better unless marked. Cells are median [min–max] over sessions (or startup launches); latency, interval and p50 / p95 cells pool every key or frame across valid sessions. – means no data; the reason is under Validity.",
   "Startup is measured from the mach time just before the launch call. Window visible = first poll that sees an on-screen window of the pid; content ready = first captured frame matching the Mailbox signature. The first startup launch per app is discarded.",
   "CPU, instructions, cycles, energy and wakeups are rusage deltas summed over the app's whole process tree during the phase. Processes that first appear during a phase count from zero.",
+  "GPU time is the accumulated GPU time of the accelerator user clients each process in the tree owns (the IOKit registry source of Activity Monitor's GPU column), as a delta over the phase. It counts the app's own submissions; WindowServer's compositing is not attributed to the app, same as CPU. – means the run predates GPU sampling.",
   "The capture delivers a frame per display refresh whether or not the app drew, so every frame metric counts only app frames: frames in which the phase's target region changed (idle: any content region; scroll and hover: the list; type: search, list or count; navigate: the detail pane). The title bar is ignored. The search caret's blink repaints the search region, so an idle app with a blinking caret shows a few frames.",
   "Capture delivery rows count every delivered frame, changed or not. When it is below 0.9 x the refresh rate during an input phase, the app's frame rate and latencies cannot be better than the capture: see Validity.",
   "Scroll first-input latency = first input post to the first frame in which the list changed. Hover moves change the list only when the pointer enters another 72 pt row, so first-row-change latency runs from the first input that crosses into a new row, and every crossing gets its own latency.",

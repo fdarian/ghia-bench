@@ -19,6 +19,8 @@ export type Proc = {
   instructions: number
   cycles: number
   energyNj: number | null
+  /** GPU time this pid submitted, from the accelerator's user clients (absent in runs recorded before it existed). */
+  gpuNs?: number
   idleWakeups: number
   interruptWakeups: number
   footprint: number

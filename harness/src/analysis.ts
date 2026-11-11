@@ -31,6 +31,10 @@ export type Usage = {
   cycles: number
   /** null when the OS reports no energy at all (every counter zero or absent). */
   energyMj: number | null
+  /** GPU time the tree submitted. null for runs recorded before the helper reported it. */
+  gpuMs: number | null
+  /** Percent of one GPU's time over the phase; null like gpuMs. */
+  gpuPct: number | null
   wakeups: number
   wakeupsPerSec: number
   processes: number
@@ -46,6 +50,8 @@ type Accumulator = {
   cycles: number
   energyNj: number
   energySeen: boolean
+  gpuNs: number
+  gpuMissing: boolean
   wakeups: number
   processes: number
   newProcesses: number
@@ -72,7 +78,7 @@ export function diffUsageByGroup(
     const group = groupOf(proc)
     let acc = groups.get(group)
     if (!acc) {
-      acc = { cpuNs: 0, instructions: 0, cycles: 0, energyNj: 0, energySeen: false, wakeups: 0, processes: 0, newProcesses: 0 }
+      acc = { cpuNs: 0, instructions: 0, cycles: 0, energyNj: 0, energySeen: false, gpuNs: 0, gpuMissing: false, wakeups: 0, processes: 0, newProcesses: 0 }
       groups.set(group, acc)
     }
     const old = previous.get(proc.pid)
@@ -83,6 +89,12 @@ export function diffUsageByGroup(
     acc.instructions += proc.instructions - (base ? base.instructions : 0)
     acc.cycles += proc.cycles - (base ? base.cycles : 0)
     acc.wakeups += proc.idleWakeups + proc.interruptWakeups - (base ? base.idleWakeups + base.interruptWakeups : 0)
+    if (proc.gpuNs === undefined) acc.gpuMissing = true
+    else {
+      // A closed user client drops its time, so a backwards counter restarts from zero.
+      const gpuBase = base && base.gpuNs !== undefined && base.gpuNs <= proc.gpuNs ? base.gpuNs : 0
+      acc.gpuNs += proc.gpuNs - gpuBase
+    }
     if (proc.energyNj !== null) {
       acc.energySeen = true
       acc.energyNj += proc.energyNj - (base && base.energyNj !== null ? base.energyNj : 0)
@@ -104,6 +116,8 @@ export function diffUsageByGroup(
       instructions: acc.instructions,
       cycles: acc.cycles,
       energyMj: acc.energySeen && acc.energyNj !== 0 ? acc.energyNj / 1e6 : null,
+      gpuMs: acc.gpuMissing ? null : acc.gpuNs / NS_PER_MS,
+      gpuPct: acc.gpuMissing ? null : (acc.gpuNs / NS_PER_SEC / durationSec) * 100,
       wakeups: acc.wakeups,
       wakeupsPerSec: acc.wakeups / durationSec,
       processes: acc.processes,
