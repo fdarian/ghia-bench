@@ -1,11 +1,12 @@
+import { spawn } from "node:child_process"
 import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
 import { bundlePath, collectEnv, currentLoadAverage } from "./env"
-import { probe, runHelper, sample } from "./helper"
+import { REPO_ROOT, probe, runHelper, sample } from "./helper"
 import { requireOrRequestPermissions } from "./permissions"
 import { quitTree, runningMailboxProcesses, sleep, TreeTracker } from "./procs"
+import { ProgressFeed, STATUS_PATH, writeAtomically } from "./progress"
 import { buildReport, writeReport } from "./report"
-import { REPO_ROOT } from "./helper"
 import { appCodeTree, machineOf, measureHash, stampCode, versionKey, type VersionKey } from "./keys"
 import { buildOf } from "./stamp"
 import { ensureVersion, latestClean, latestComparison, mergeRuns, sourceOf, type StoredRun } from "./store"
@@ -35,6 +36,8 @@ export type RunOptions = {
    * the store alone. For A/B runs whose difference the key can't see (an environment variable, a local patch).
    */
   out?: string
+  /** Write the progress file and show the status panel (harness/status). */
+  status: boolean
 }
 
 export type PlanEntry = {
@@ -78,10 +81,18 @@ export function resolveInput(probeResult: Probe): Env["input"] {
 }
 
 let active: TreeTracker | null = null
+let progress: ProgressFeed | null = null
+
+const STATUS_PANEL_BIN = join(REPO_ROOT, "harness", "bin", "benchstatus")
 
 function installInterruptHandler(): void {
   const stop = (signal: string) => {
     console.error(`\n${signal}: quitting the app under test and stopping`)
+    try {
+      progress?.stop(`interrupted by ${signal}`)
+    } catch (error) {
+      console.error(`progress feed: ${message(error)}`)
+    }
     const tracker = active
     const finish = () => process.exit(130)
     if (tracker) quitTree(tracker).then(finish, finish)
@@ -138,6 +149,7 @@ function appendRecord(outs: Outs, record: RunRecord): void {
 async function startupLaunch(
   app: AppId, index: number, capture: boolean, out: Outs,
 ): Promise<void> {
+  progress?.unitStart("startup", app, index)
   const errors: StepError[] = []
   const startedAt = new Date().toISOString()
   const loadBefore = currentLoadAverage()
@@ -158,6 +170,7 @@ async function startupLaunch(
     launch, sample: observed, quit: quitResult, errors,
   }
   appendRecord(out, record)
+  progress?.unitEnd()
   const visible = launch && launch.windowVisibleNs !== null ? ((launch.windowVisibleNs - launch.t0Ns) / 1e6).toFixed(0) : "-"
   console.log(`launch ${app} #${index + 1}${record.discarded ? " (discarded)" : ""}: window visible ${visible} ms${errors.length ? `, ${errors.length} error(s)` : ""}`)
 }
@@ -166,6 +179,7 @@ async function runPhase(
   tracker: TreeTracker, name: PhaseName, capture: boolean, inputEnabled: boolean, inputReason: string,
 ): Promise<PhaseRecord> {
   if (name !== "idle" && !inputEnabled) return { status: "skipped", reason: inputReason }
+  progress?.phaseStart(name)
   const args = ["phase", "--pid", String(tracker.root), "--name", name]
   if (name === "idle") args.push("--seconds", String(IDLE_SECONDS))
   if (capture) args.push("--capture")
@@ -187,6 +201,7 @@ async function runPhase(
 async function session(
   app: AppId, round: number, capture: boolean, input: Env["input"], out: Outs,
 ): Promise<void> {
+  progress?.unitStart("session", app, round)
   const errors: StepError[] = []
   const startedAt = new Date().toISOString()
   const loadBefore = currentLoadAverage()
@@ -223,6 +238,7 @@ async function session(
     launch, window, phases, finalSample, processTypes, quit: quitResult, errors,
   }
   appendRecord(out, record)
+  progress?.unitEnd()
   const states = (Object.keys(phases) as PhaseName[]).map((name) => `${name}:${phases[name].status}`).join(" ")
   const windowText = window ? `appActive=${window.appActive} covered=${(window.coveredFraction * 100).toFixed(0)}%` : "window=?"
   console.log(`session ${app} round ${round + 1}: ${windowText}; ${states}; load ${loadBefore[0].toFixed(1)} -> ${record.loadAfter[0].toFixed(1)}`)
@@ -289,12 +305,42 @@ async function measure(
   console.log(`input phases: ${input.enabled ? "on" : "SKIPPED"} (${input.reason})`)
   if (env.warnings.length > 0) console.log(`env warnings: ${env.warnings.join("; ")}`)
   installInterruptHandler()
-  for (let index = 0; index < options.launches; index++) {
-    for (const app of rotate(apps, index)) await startupLaunch(app, index, capture.enabled, outs)
+  if (options.status) startProgress(apps, options, input)
+  try {
+    for (let index = 0; index < options.launches; index++) {
+      for (const app of rotate(apps, index)) await startupLaunch(app, index, capture.enabled, outs)
+    }
+    for (let round = 0; round < options.rounds; round++) {
+      for (const app of rotate(apps, round)) await session(app, round, capture.enabled, input, outs)
+    }
+  } catch (error) {
+    progress?.stop(message(error))
+    throw error
   }
-  for (let round = 0; round < options.rounds; round++) {
-    for (const app of rotate(apps, round)) await session(app, round, capture.enabled, input, outs)
+  progress?.finish()
+}
+
+function startProgress(apps: AppId[], options: RunOptions, input: Env["input"]): void {
+  const feed = new ProgressFeed({
+    path: STATUS_PATH,
+    startupUnits: apps.length * options.launches,
+    sessionUnits: apps.length * options.rounds,
+    launches: options.launches,
+    rounds: options.rounds,
+    inputEnabled: input.enabled,
+    now: Date.now,
+    write: writeAtomically,
+  })
+  feed.begin()
+  progress = feed
+  if (!existsSync(STATUS_PANEL_BIN)) {
+    console.log("status panel: not built; run harness/status/build.sh to see what is running and when it finishes (or --status off)")
+    return
   }
+  // Detached so the panel outlives the bench and keeps showing Done.
+  const panel = spawn(STATUS_PANEL_BIN, [STATUS_PATH], { detached: true, stdio: "ignore" })
+  panel.on("error", (error) => console.error(`status panel: ${error.message}`))
+  panel.unref()
 }
 
 export async function runBench(options: RunOptions): Promise<void> {
