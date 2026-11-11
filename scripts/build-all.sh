@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Everything needed before a run, from a fresh clone: the pinned Ghia build, the message data, the
-# measurement helper and the six packaged apps in dist/.
+# measurement helper, the status panel and the six packaged apps in dist/.
 set -euo pipefail
 
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -12,6 +12,7 @@ cd "$root"
 
 # The harness has no dependencies to install: it uses Bun and Node built-ins only.
 "$root/harness/helper/build.sh"
+"$root/harness/status/build.sh"
 
 "$root/apps/electron/build.sh"
 "$root/apps/ghia/build.sh"

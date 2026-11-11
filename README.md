@@ -110,12 +110,12 @@ Prerequisites: macOS on Apple silicon, Xcode with the Metal toolchain (and Swift
 scripts/build-all.sh
 ```
 
-From a fresh clone this builds the pinned Ghia (`scripts/setup-ghia.sh`), generates `data/messages.json`, builds the measurement helper, then the eight apps into `dist/Mailbox-Electron.app`, `dist/Mailbox-Ghia.app`, `dist/Mailbox-GhiaAOT.app`, `dist/Mailbox-GPUIX.app`, `dist/Mailbox-GPUI.app`, `dist/Mailbox-SwiftUI.app`, `dist/Mailbox-NSH.app` and `dist/Mailbox-MyGo.app`, and prints their sizes. It takes a long time (a release gpui build, twice, plus the Swift and Go builds).
+From a fresh clone this builds the pinned Ghia (`scripts/setup-ghia.sh`), generates `data/messages.json`, builds the measurement helper and the status panel, then the eight apps into `dist/Mailbox-Electron.app`, `dist/Mailbox-Ghia.app`, `dist/Mailbox-GhiaAOT.app`, `dist/Mailbox-GPUIX.app`, `dist/Mailbox-GPUI.app`, `dist/Mailbox-SwiftUI.app`, `dist/Mailbox-NSH.app` and `dist/Mailbox-MyGo.app`, and prints their sizes. It takes a long time (a release gpui build, twice, plus the Swift and Go builds).
 
 <details>
 <summary>Build notes</summary>
 
-- Each step is also runnable alone: `scripts/setup-ghia.sh`, `bun run data`, `harness/helper/build.sh` (writes `harness/bin/benchhelper`), `apps/<electron|ghia|gpuix|gpui|swiftui|nsh|mygo>/build.sh` and `apps/ghia/build-aot.sh` (the Ghia app again, compiled by the canary Bun in `$BUN_AOT`, default `~/.bun-canary/bin/bun`; it needs `verbatimModuleSyntax` removed from `vendor/ghia/packages/{native,solid}/tsconfig.json`, see the script). Each app script installs its own dependencies from its lockfile.
+- Each step is also runnable alone: `scripts/setup-ghia.sh`, `bun run data`, `harness/helper/build.sh` (writes `harness/bin/benchhelper`), `harness/status/build.sh` (writes `harness/bin/benchstatus`, the progress panel), `apps/<electron|ghia|gpuix|gpui|swiftui|nsh|mygo>/build.sh` and `apps/ghia/build-aot.sh` (the Ghia app again, compiled by the canary Bun in `$BUN_AOT`, default `~/.bun-canary/bin/bun`; it needs `verbatimModuleSyntax` removed from `vendor/ghia/packages/{native,solid}/tsconfig.json`, see the script). Each app script installs its own dependencies from its lockfile.
 - NSH: `apps/nsh/build.sh` needs `data/messages.json` and the `nsh` CLI on `PATH`. It runs `nsh check` and `nsh package . --target macos`, which uses a prebuilt runtime, so no Rust toolchain is needed; the script then renames the executable to `Mailbox-NSH` and copies `messages.json` into the bundle (see SPEC.md, NSH parity notes).
 - The harness has no dependencies to install.
 - Optional env vars: `GHIA_SRC=/path/to/ghia` (local Ghia checkout, see above) and `GHIA_HEAVY=<wrapper>`, a command such as a lock script that the Ghia native build and the GPUI and MyGo builds are run through (`$GHIA_HEAVY cargo build --release`). Without it, or if it is not executable, they run directly. `setup-ghia.sh`, `apps/gpui/build.sh` and `apps/mygo/build.sh` honour both as applicable.
@@ -142,7 +142,7 @@ Run from a **foreground terminal window** on the main display, started by you: a
 ```
 bun harness/src/bench.ts check
 bun harness/src/bench.ts plan [--apps ...] [--fresh ghia,gpui|all]
-bun harness/src/bench.ts run [--apps electron,ghia,ghia-aot,gpuix,gpui,swiftui,nsh,mygo] [--fresh ghia,gpui|all] [--tag name] [--rounds 5] [--launches 10] [--capture auto|on|off] [--allow-missing-permissions] [--out <dir>]
+bun harness/src/bench.ts run [--apps electron,ghia,ghia-aot,gpuix,gpui,swiftui,nsh,mygo] [--fresh ghia,gpui|all] [--tag name] [--rounds 5] [--launches 10] [--capture auto|on|off] [--allow-missing-permissions] [--status on|off] [--out <dir>]
 bun harness/src/bench.ts report [<run dir>] [--include-invalid]
 bun test harness/src
 ```
@@ -150,7 +150,7 @@ bun test harness/src
 `harness/package.json` has the same as `bun run check|run|report|test` from `harness/`.
 
 - `check` prints what is measurable right now and why not (permissions), the load average, the display and its refresh rate, any running `Mailbox-*` process, and which bundles exist in `dist/`. Run it first.
-- `run` does `--launches` startup-only launches per app (the first is discarded: launch, wait for the window to stop moving, +1 s, quit), then `--rounds` full sessions per app (launch, settle 3 s, window check, idle 10 s, scroll, hover, type, navigate, settle 2 s, memory sample, quit). App order is rotated every launch and round. `--capture auto` captures frames only when Screen Recording is granted, `on` forces an attempt, `off` never captures and needs only Accessibility. Quitting is SIGTERM to the app's root pid, then SIGKILL of any still-running pid of the tree it sampled after 3 s; nothing else is ever signalled. Ctrl-C quits the app under test and stops. The run writes `report.md` at the end.
+- `run` does `--launches` startup-only launches per app (the first is discarded: launch, wait for the window to stop moving, +1 s, quit), then `--rounds` full sessions per app (launch, settle 3 s, window check, idle 10 s, scroll, hover, type, navigate, settle 2 s, memory sample, quit). App order is rotated every launch and round. `--capture auto` captures frames only when Screen Recording is granted, `on` forces an attempt, `off` never captures and needs only Accessibility. Quitting is SIGTERM to the app's root pid, then SIGKILL of any still-running pid of the tree it sampled after 3 s; nothing else is ever signalled. Ctrl-C quits the app under test and stops. While it runs, `--status on` (the default) writes progress to `/tmp/ghia-bench-status.json` and opens the panel `harness/bin/benchstatus` (built by `harness/status/build.sh`) at the top right of the main display: "Hands off" with the current unit, units done and the estimated finish time, then Done or Stopped (click it to close; it quits itself after 30 minutes). Without the binary the run says so and carries on; `--status off` does neither. The run writes `report.md` at the end.
 - `run` measures only what changed. Each app's version key (below) is worked out from its bundle's build stamp; an app with a clean stored run of the same key is re-used, not measured. `--fresh <apps>` (or `all`) measures them anyway. `plan` prints what a run would measure or re-use, and why, without running anything. `--out <dir>` is experiment mode: every app is measured into that one folder and the store is left alone, for A/B runs the key can't tell apart (an environment variable, a local patch).
 - `report` regenerates `report.md` from `runs.jsonl` and `env.json`. With no folder it writes `results/comparison.md`: the newest clean run of every app on the newest run's machine setup, with a Sources table naming the version, key, run, date and load of each app's numbers. Sessions whose window was not active or was covered are left out of the frame and latency numbers; `--include-invalid` puts them back.
 
@@ -207,6 +207,7 @@ apps/swiftui/        Swift package, native SwiftUI
 apps/nsh/            TSX on nsh 0.4.0 (QuickJS), native AppKit views
 apps/mygo/           Go module on MyGo's native ui package
 harness/helper/      Swift CLI: launch timing, process metrics, input, frame capture
+harness/status/      Swift AppKit panel: progress of a run (what is running, what is left)
 harness/src/         Bun orchestrator: rounds, stats, report
 dist/                packaged apps (gitignored)
 results/             per-app, per-version output (gitignored)
