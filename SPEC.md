@@ -1,6 +1,6 @@
 # Mailbox app spec
 
-Contract that all eight apps (Electron, Ghia, Ghia compiled with Bun AOT, GPUIX, raw GPUI, SwiftUI, NSH, MyGo) implement. Apps contain no benchmark code; all measurement is external.
+Contract that all nine apps (Electron, Ghia, Ghia compiled with Bun AOT, Ghia in React, GPUIX, raw GPUI, SwiftUI, NSH, MyGo) implement. Apps contain no benchmark code; all measurement is external.
 
 Light theme only. System UI font (SF Pro) everywhere: CSS `system-ui`, gpui `.SystemUIFont`, Ghia default.
 
@@ -104,6 +104,12 @@ Both scroll areas (the list and the detail pane) show an overlay scrollbar on th
 - Ghia: `letter-spacing: 0.5` on "LABELS" is not applied: `letterSpacing` is not in Ghia's `StyleDesc` for HTML text (only SVG text has it), so the heading is drawn without tracking (a few px narrower).
 - Ghia: `<virtual-list>` runs in `itemCount` mode (documented windowing): 60 rows are mounted around `onVisibleRange.startIndex` (native builds viewport + 512 px overdraw, about 24 rows). `scrollToItem` top-aligns a row, so selection-into-view uses `scrollTo` against the fixed 72 px rows to get the SPEC's minimal scroll.
 - Ghia (bun AOT): the same source as Ghia, built by `apps/ghia/build-aot.sh` with `compile.aot` on a canary Bun; the stamp records that Bun's revision and `aot`. The Ghia stamp records its Bun revision too.
+- Ghia (React): the same Mailbox written as a production React app (React 19 on `@ghia/react`, Base UI 1.9.0 `Input`, `Avatar`, `ScrollArea` and `Button`, StyleX, React Compiler), kept for React vs Solid comparisons. Layout and behaviour were verified pixel-identical to the Solid app with Ghia automation screenshots and the benchhelper phases. It differs from the Solid app on purpose:
+  - List: `@tanstack/react-virtual` over a plain scrolling `div` (overscan 10, fixed 72 px rows) instead of the native `<virtual-list>`'s 60-row window.
+  - Detail pane: Base UI `ScrollArea` instead of Ghia's own scroll container; the thumb is hidden unless hovering or scrolling.
+  - Styling: StyleX, extracted statically by `@stylexjs/unplugin` and shipped as `Contents/Resources/stylex.css`, mounted with `<style>`; the Solid app uses style objects.
+  - React Compiler: runs on every component except `MessageList`, which it skips because `useVirtualizer` is an incompatible library.
+  - Each list row positions itself with one inline `translateY` style: StyleX dynamic values need `@property`, which Ghia skips.
 - GPUIX: the app is Ghia's code ported to upstream gpuix as published on npm (`@gpuix/solid`, `@gpuix/native` and the prebuilt `@gpuix/native-darwin-arm64`, all 0.11.0; no source build), and 0.11.0 forces these deviations:
   - `render()` takes no window position or appearance, so the app places the window's top-left at (100, 100) and sets Aqua appearance itself through libobjc (`bun:ffi`, `apps/gpuix/src/window.ts`) right after `render()`.
   - Key names are GPUI's (`down`, `up`, `escape`), not DOM's.
