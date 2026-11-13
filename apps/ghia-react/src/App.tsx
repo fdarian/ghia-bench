@@ -1,5 +1,6 @@
 import { useRef, useState } from 'react'
 import type { KeyboardEvent, Ref, RefObject } from 'react'
+import { useVirtualizer } from '@tanstack/react-virtual'
 import { Avatar } from '@base-ui/react/avatar'
 import { Button } from '@base-ui/react/button'
 import { Input } from '@base-ui/react/input'
@@ -9,11 +10,7 @@ import type { StyleXStyles } from '@stylexjs/stylex'
 import type { Message } from './types'
 
 const ROW_HEIGHT = 72
-// Rows mounted around the first visible one. Native builds only the viewport plus its overdraw
-// (about 24 rows); the rest of the window is slack so a fast scroll never reaches an unmounted row.
-const WINDOW = 60
-const WINDOW_STEP = 10
-const WINDOW_LEAD = 15
+const OVERSCAN = 10
 
 const FOLDERS = ['Inbox', 'Starred', 'Sent', 'Drafts', 'Archive', 'Spam', 'Trash']
 const FOLDER_COUNTS: Record<string, number> = {
@@ -156,10 +153,14 @@ const styles = stylex.create({
     paddingLeft: 16,
   },
   summaryText: { fontSize: 12, color: '#71717A' },
-  list: { flexGrow: 1, minHeight: 0 },
+  list: { flexGrow: 1, minHeight: 0, overflowY: 'auto' },
+  listInner: { position: 'relative', width: '100%' },
 
   row: {
-    position: 'relative',
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    width: '100%',
     height: ROW_HEIGHT,
     borderBottomWidth: 1,
     borderBottomStyle: 'solid',
@@ -362,6 +363,7 @@ function Sidebar(props: { unreadCount: number }) {
 type RowProps = {
   message: Message
   index: number
+  top: number
   selected: boolean
   onSelect: (index: number) => void
 }
@@ -369,7 +371,11 @@ type RowProps = {
 function Row(props: RowProps) {
   const message = props.message
   return (
-    <div {...stylex.props(styles.row, props.selected && styles.rowSelected)} onClick={() => props.onSelect(props.index)}>
+    <div
+      {...stylex.props(styles.row, props.selected && styles.rowSelected)}
+      style={{ transform: `translateY(${props.top}px)` }}
+      onClick={() => props.onSelect(props.index)}
+    >
       {message.unread && <div {...stylex.props(styles.unreadDot)} />}
       <MessageAvatar name={message.fromName} size="small" xstyle={styles.rowAvatar} />
       <div {...stylex.props(styles.rowText)}>
@@ -434,15 +440,20 @@ export function App(props: { messages: Message[] }) {
 
   const [text, setText] = useState('')
   const [selectedIndex, setSelectedIndex] = useState(0)
-  const [windowStart, setWindowStart] = useState(0)
 
-  const listRef = useRef<HTMLElement>(null)
+  const listRef = useRef<HTMLDivElement>(null)
   const detailRef = useRef<HTMLDivElement>(null)
 
   const query = text.trim().toLowerCase()
   const results = query === '' ? messages : messages.filter((_, index) => haystacks[index].includes(query))
   const selected = results[selectedIndex]
-  const windowRows = results.slice(windowStart, windowStart + WINDOW)
+
+  const virtualizer = useVirtualizer({
+    count: results.length,
+    getScrollElement: () => listRef.current,
+    estimateSize: () => ROW_HEIGHT,
+    overscan: OVERSCAN,
+  })
 
   function select(index: number) {
     setSelectedIndex(index)
@@ -452,17 +463,8 @@ export function App(props: { messages: Message[] }) {
   function filter(value: string) {
     setText(value)
     setSelectedIndex(0)
-    setWindowStart(0)
-    current(listRef).scrollTo({ top: 0 })
+    current(listRef).scrollTop = 0
     current(detailRef).scrollTo({ top: 0 })
-  }
-
-  function reveal(index: number) {
-    const list = current(listRef)
-    const top = index * ROW_HEIGHT
-    const bottom = top + ROW_HEIGHT
-    if (top < list.scrollTop) list.scrollTo({ top })
-    else if (bottom > list.scrollTop + list.clientHeight) list.scrollTo({ top: bottom - list.clientHeight })
   }
 
   function onKeyDown(event: KeyboardEvent<HTMLInputElement>) {
@@ -472,7 +474,7 @@ export function App(props: { messages: Message[] }) {
       if (count === 0) return
       const next = Math.min(count - 1, Math.max(0, selectedIndex + (event.key === 'ArrowDown' ? 1 : -1)))
       select(next)
-      reveal(next)
+      virtualizer.scrollToIndex(next, { align: 'auto' })
     } else if (event.key === 'Escape') {
       filter('')
     }
@@ -495,26 +497,20 @@ export function App(props: { messages: Message[] }) {
         <div {...stylex.props(styles.summary)}>
           <div {...stylex.props(styles.summaryText)}>{`${numberFormat.format(results.length)} conversations`}</div>
         </div>
-        <virtual-list
-          ref={listRef}
-          itemCount={results.length}
-          estimatedItemHeight={ROW_HEIGHT}
-          windowStart={windowStart}
-          onVisibleRange={(event) =>
-            setWindowStart(Math.max(0, Math.floor((event.startIndex - WINDOW_LEAD) / WINDOW_STEP) * WINDOW_STEP))
-          }
-          {...stylex.props(styles.list)}
-        >
-          {windowRows.map((message, offset) => (
-            <Row
-              key={message.id}
-              message={message}
-              index={windowStart + offset}
-              selected={message === selected}
-              onSelect={select}
-            />
-          ))}
-        </virtual-list>
+        <div ref={listRef} {...stylex.props(styles.list)}>
+          <div {...stylex.props(styles.listInner)} style={{ height: virtualizer.getTotalSize() }}>
+            {virtualizer.getVirtualItems().map((item) => (
+              <Row
+                key={item.key}
+                message={results[item.index]}
+                index={item.index}
+                top={item.start}
+                selected={item.index === selectedIndex}
+                onSelect={select}
+              />
+            ))}
+          </div>
+        </div>
       </div>
       <Detail message={selected} viewportRef={detailRef} />
     </div>
