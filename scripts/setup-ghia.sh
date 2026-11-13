@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Clones Ghia at a pinned revision into vendor/ghia and builds it the way Ghia publishes it
-# (release addon with test-support, then @ghia/solid's dist).
+# (release addon with test-support, then the dists of ghia, @ghia/solid and @ghia/react).
 #
 # GHIA_SRC=/path/to/ghia  clone from a local checkout (zed taken from its zed/ too, no network).
 # unset                   clone https://github.com/fdarian/ghia.git; zed (several GB) is fetched as a
@@ -82,6 +82,8 @@ fi
 (cd "$dest/packages/ghia" && bun run build)
 (cd "$dest/packages/solid" && bun run build)
 [ -d "$dest/packages/solid/dist" ] || { echo "packages/solid/dist missing after build" >&2; exit 1; }
+(cd "$dest/packages/react" && bun run build)
+[ -d "$dest/packages/react/dist" ] || { echo "packages/react/dist missing after build" >&2; exit 1; }
 
 echo
 echo "ghia   $(git -C "$dest" rev-parse HEAD)"
