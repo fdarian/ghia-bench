@@ -333,6 +333,7 @@ describe("groups", () => {
     expect(groupNames("electron")).toContain("renderer")
     expect(groupNames("ghia")).toBeNull()
     expect(groupNames("ghia-aot")).toBeNull()
+    expect(groupNames("ghia-react")).toBeNull()
     expect(groupNames("gpuix")).toBeNull()
     expect(groupNames("swiftui")).toBeNull()
     expect(groupNames("nsh")).toBeNull()

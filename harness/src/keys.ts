@@ -124,6 +124,16 @@ export function upstreamOf(stamp: BuildStamp): { label: string; versions: Record
       const v = stamp.versions
       return { label: v.sha.slice(0, 8), versions: { native: v.native, solid: v.solid, sha: v.sha, zedSha: v.zedSha, bun: v.bun, aot: v.aot } }
     }
+    case "ghia-react": {
+      const v = stamp.versions
+      return {
+        label: v.sha.slice(0, 8),
+        versions: {
+          native: v.native, react: v.react, reactLib: v.reactLib, baseUi: v.baseUi, stylex: v.stylex, compiler: v.compiler,
+          sha: v.sha, zedSha: v.zedSha, bun: v.bun,
+        },
+      }
+    }
     case "gpuix": {
       const v = stamp.versions
       return { label: v.solid, versions: { solid: v.solid, native: v.native, addon: v.addon } }
@@ -154,7 +164,7 @@ export function upstreamOf(stamp: BuildStamp): { label: string; versions: Record
 
 /** Which reason, if any, makes a stamped build impossible to identify by its code. */
 function dirtyReason(stamp: BuildStamp): string | null {
-  if ((stamp.app === "ghia" || stamp.app === "ghia-aot") && stamp.versions.dirty) return "the Ghia tree had uncommitted changes when it was built"
+  if ((stamp.app === "ghia" || stamp.app === "ghia-aot" || stamp.app === "ghia-react") && stamp.versions.dirty) return "the Ghia tree had uncommitted changes when it was built"
   return null
 }
 

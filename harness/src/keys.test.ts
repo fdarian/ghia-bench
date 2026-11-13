@@ -81,6 +81,17 @@ describe("keys", () => {
     expect(versionKey(otherBun, "tree", "m", MACHINE).key).not.toBe(plain.key)
   })
 
+  test("Ghia (React) is keyed by its Ghia tree and its library versions, and a dirty Ghia tree makes it unreusable", () => {
+    const plain = versionKey(STAMPS["ghia-react"], "tree", "m", MACHINE)
+    expect(plain.label).toBe("8fcd806f")
+    expect(plain.unreusable).toBeNull()
+    expect(plain.key).not.toBe(versionKey(STAMPS.ghia, "tree", "m", MACHINE).key)
+    const otherStylex = { ...STAMPS["ghia-react"], versions: { ...STAMPS["ghia-react"].versions, stylex: "0.99.0" } }
+    expect(versionKey(otherStylex, "tree", "m", MACHINE).key).not.toBe(plain.key)
+    const dirty = { ...STAMPS["ghia-react"], versions: { ...STAMPS["ghia-react"].versions, dirty: true } }
+    expect(versionKey(dirty, "tree", "m", MACHINE).unreusable).toMatch(/uncommitted/)
+  })
+
   test("the machine part is the chip, macOS, display, scroll bars and capture", () => {
     const env = {
       chip: "M1 Pro", macos: "27.0.1 (26A434)", scrollBars: "WhenScrolling", capture: { enabled: false, reason: "" },

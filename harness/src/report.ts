@@ -374,6 +374,11 @@ function ghiaAotLine(stamp: BuildStamp<"ghia-aot">): string {
   return `Ghia (bun AOT) ${v.sha}${v.dirty ? " (tree had uncommitted changes)" : ""}, zed ${v.zedSha}, @ghia/native ${v.native}, @ghia/solid ${v.solid}, from ${v.source}; built with Bun ${v.bun}, AOT ${v.aot ? "on" : "off"}.`
 }
 
+function ghiaReactLine(stamp: BuildStamp<"ghia-react">): string {
+  const v = stamp.versions
+  return `Ghia (React) ${v.sha}${v.dirty ? " (tree had uncommitted changes)" : ""}, zed ${v.zedSha}, @ghia/native ${v.native}, @ghia/react ${v.react}, React ${v.reactLib}, Base UI ${v.baseUi}, StyleX ${v.stylex}, React Compiler ${v.compiler}, from ${v.source}; built with Bun ${v.bun}.`
+}
+
 function gpuixLine(stamp: BuildStamp<"gpuix">): string {
   const v = stamp.versions
   return `GPUIX @gpuix/solid ${v.solid}, @gpuix/native ${v.native}, @gpuix/native-darwin-arm64 ${v.addon}, from ${v.source}.`
@@ -416,6 +421,7 @@ export function renderEnvironment(env: Env): string {
     ...(env.sources ? [] : [`Load average (1/5/15 min) at start: ${env.loadAverage.map((value) => value.toFixed(2)).join(" / ")}.`]),
     ...(env.args.apps.includes("ghia") ? [ghiaLine(buildOf(env, "ghia"))] : []),
     ...(env.args.apps.includes("ghia-aot") ? [ghiaAotLine(buildOf(env, "ghia-aot"))] : []),
+    ...(env.args.apps.includes("ghia-react") ? [ghiaReactLine(buildOf(env, "ghia-react"))] : []),
     ...(env.args.apps.includes("gpuix") ? [gpuixLine(buildOf(env, "gpuix"))] : []),
     ...(env.args.apps.includes("gpui") ? [gpuiLine(buildOf(env, "gpui"))] : []),
     ...(env.args.apps.includes("electron") ? [electronLine(buildOf(env, "electron"))] : []),

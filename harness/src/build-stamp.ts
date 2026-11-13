@@ -89,17 +89,38 @@ async function bunRevision(bun: string): Promise<string> {
   return exec([bun, "--revision"])
 }
 
-async function ghiaVersions(bun: string): Promise<StampVersions["ghia"]> {
+/** The state of the vendor/ghia checkout every Ghia app is built from, and the Bun that built it. */
+async function ghiaTreeState(bun: string): Promise<Pick<StampVersions["ghia"], "sha" | "zedSha" | "dirty" | "source" | "bun">> {
   const ghia = await gitState(GHIA_DIR, GHIA_BUILD_OUTPUTS)
-  const modules = join(REPO_ROOT, "apps", "ghia", "node_modules", "@ghia")
   return {
-    native: packageVersion(join(modules, "native", "package.json")),
-    solid: packageVersion(join(modules, "solid", "package.json")),
     sha: ghia.sha,
     zedSha: (await gitState(join(GHIA_DIR, "zed"))).sha,
     dirty: ghia.dirty,
     source: await exec(["git", "-C", GHIA_DIR, "remote", "get-url", "origin"]),
     bun: await bunRevision(bun),
+  }
+}
+
+async function ghiaVersions(bun: string): Promise<StampVersions["ghia"]> {
+  const modules = join(REPO_ROOT, "apps", "ghia", "node_modules", "@ghia")
+  return {
+    native: packageVersion(join(modules, "native", "package.json")),
+    solid: packageVersion(join(modules, "solid", "package.json")),
+    ...(await ghiaTreeState(bun)),
+  }
+}
+
+async function ghiaReactVersions(bun: string): Promise<StampVersions["ghia-react"]> {
+  const modules = join(REPO_ROOT, "apps", "ghia-react", "node_modules")
+  const installed = (name: string) => packageVersion(join(modules, name, "package.json"))
+  return {
+    native: installed("@ghia/native"),
+    react: installed("@ghia/react"),
+    reactLib: installed("react"),
+    baseUi: installed("@base-ui/react"),
+    stylex: installed("@stylexjs/stylex"),
+    compiler: installed("babel-plugin-react-compiler"),
+    ...(await ghiaTreeState(bun)),
   }
 }
 
@@ -161,6 +182,7 @@ export async function stampBundle(app: AppId, bundle: string): Promise<BuildStam
   switch (app) {
     case "ghia": return { app, ...common, versions: await ghiaVersions(process.execPath) }
     case "ghia-aot": return { app, ...common, versions: await ghiaAotVersions() }
+    case "ghia-react": return { app, ...common, versions: await ghiaReactVersions(process.execPath) }
     case "gpuix": return { app, ...common, versions: await gpuixVersions() }
     case "gpui": return { app, ...common, versions: await gpuiVersions() }
     case "swiftui": return { app, ...common, versions: await swiftuiVersions() }

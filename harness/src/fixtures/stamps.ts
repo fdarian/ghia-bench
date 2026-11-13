@@ -20,6 +20,14 @@ export const STAMPS: { [A in AppId]: BuildStamp<A> } = {
       dirty: false, source: "https://github.com/fdarian/ghia.git", bun: "1.4.4-canary.1+b1305ddc7", aot: true,
     },
   },
+  "ghia-react": {
+    app: "ghia-react", builtAt: "2026-11-06T01:01:45.000Z", bench: { sha: "aaaaaaa1111111111111111111111111111111aa", dirty: false },
+    versions: {
+      native: "0.11.1", react: "0.11.1", reactLib: "19.2.0", baseUi: "1.0.0", stylex: "0.15.0", compiler: "19.1.0-rc.3",
+      sha: "8fcd806f5969c5eafc00ee1114ef7b66d8a2ca15", zedSha: "451f7ec4d15f7d7444a1f347d5b916e2a7989bab",
+      dirty: false, source: "https://github.com/fdarian/ghia.git", bun: "1.4.4+38afee6c8",
+    },
+  },
   gpuix: {
     app: "gpuix", builtAt: "2026-11-06T01:01:30.000Z", bench: { sha: "aaaaaaa1111111111111111111111111111111aa", dirty: false },
     versions: { solid: "0.11.0", native: "0.11.0", addon: "0.11.0", source: "npm" },

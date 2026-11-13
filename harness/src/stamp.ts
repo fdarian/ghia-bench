@@ -7,9 +7,15 @@ export const STAMP_FILE = "bench-build.json"
 
 type GhiaVersions = { native: string; solid: string; sha: string; zedSha: string; dirty: boolean; source: string; bun: string }
 
+type GhiaReactVersions = {
+  native: string; react: string; reactLib: string; baseUi: string; stylex: string; compiler: string
+  sha: string; zedSha: string; dirty: boolean; source: string; bun: string
+}
+
 export type StampVersions = {
   ghia: GhiaVersions
   "ghia-aot": GhiaVersions & { aot: boolean }
+  "ghia-react": GhiaReactVersions
   gpuix: { solid: string; native: string; addon: string; source: string }
   gpui: { git: string; commit: string; rustc: string }
   swiftui: { swift: string; xcode: string; xcodeBuild: string; sdk: string }
@@ -33,6 +39,10 @@ export type BuildStamp<A extends AppId = AppId> = {
 const FIELD_TYPES: { [A in AppId]: Record<keyof StampVersions[A], "string" | "boolean"> } = {
   ghia: { native: "string", solid: "string", sha: "string", zedSha: "string", dirty: "boolean", source: "string", bun: "string" },
   "ghia-aot": { native: "string", solid: "string", sha: "string", zedSha: "string", dirty: "boolean", source: "string", bun: "string", aot: "boolean" },
+  "ghia-react": {
+    native: "string", react: "string", reactLib: "string", baseUi: "string", stylex: "string", compiler: "string",
+    sha: "string", zedSha: "string", dirty: "boolean", source: "string", bun: "string",
+  },
   gpuix: { solid: "string", native: "string", addon: "string", source: "string" },
   gpui: { git: "string", commit: "string", rustc: "string" },
   swiftui: { swift: "string", xcode: "string", xcodeBuild: "string", sdk: "string" },

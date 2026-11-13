@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Everything needed before a run, from a fresh clone: the pinned Ghia build, the message data, the
-# measurement helper, the status panel and the six packaged apps in dist/.
+# measurement helper, the status panel and the nine packaged apps in dist/.
 set -euo pipefail
 
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -17,6 +17,7 @@ cd "$root"
 "$root/apps/electron/build.sh"
 "$root/apps/ghia/build.sh"
 "$root/apps/ghia/build-aot.sh"
+"$root/apps/ghia-react/build.sh"
 "$root/apps/gpuix/build.sh"
 "$root/apps/gpui/build.sh"
 "$root/apps/swiftui/build.sh"
@@ -25,4 +26,4 @@ cd "$root"
 
 echo
 echo "dist/ bundle sizes:"
-du -sh dist/Mailbox-Electron.app dist/Mailbox-Ghia.app dist/Mailbox-GhiaAOT.app dist/Mailbox-GPUIX.app dist/Mailbox-GPUI.app dist/Mailbox-SwiftUI.app dist/Mailbox-NSH.app dist/Mailbox-MyGo.app
+du -sh dist/Mailbox-Electron.app dist/Mailbox-Ghia.app dist/Mailbox-GhiaAOT.app dist/Mailbox-GhiaReact.app dist/Mailbox-GPUIX.app dist/Mailbox-GPUI.app dist/Mailbox-SwiftUI.app dist/Mailbox-NSH.app dist/Mailbox-MyGo.app

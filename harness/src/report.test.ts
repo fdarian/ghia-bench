@@ -88,6 +88,12 @@ describe("renderEnvironment", () => {
     expect(all).not.toContain("bun AOT")
   })
 
+  test("Ghia (React) lists its Ghia, React, Base UI, StyleX and compiler versions", () => {
+    const withReact = renderEnvironment({ ...env, args: { ...env.args, apps: ["ghia", "ghia-react"] }, apps: appInfos(["ghia", "ghia-react"]) })
+    expect(withReact).toContain("- Ghia (React) 8fcd806f5969c5eafc00ee1114ef7b66d8a2ca15, zed 451f7ec4d15f7d7444a1f347d5b916e2a7989bab, @ghia/native 0.11.1, @ghia/react 0.11.1, React 19.2.0, Base UI 1.0.0, StyleX 0.15.0, React Compiler 19.1.0-rc.3, from https://github.com/fdarian/ghia.git; built with Bun 1.4.4+38afee6c8.")
+    expect(all).not.toContain("Ghia (React)")
+  })
+
   test("GPUIX lists its three npm packages", () => {
     const withGpuix = renderEnvironment({ ...env, args: { ...env.args, apps: ["ghia", "gpuix"] }, apps: appInfos(["ghia", "gpuix"]) })
     expect(withGpuix).toContain("- GPUIX @gpuix/solid 0.11.0, @gpuix/native 0.11.0, @gpuix/native-darwin-arm64 0.11.0, from npm.")

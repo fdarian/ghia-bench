@@ -57,6 +57,11 @@ describe("environmentLine", () => {
     expect(line).toContain("Ghia 8fcd806 (zed 451f7ec, Bun 1.4.4+38afee6c8), Ghia AOT 8fcd806 (zed 451f7ec, Bun 1.4.4-canary.1+b1305ddc7, AOT), Bun")
   })
 
+  test("Ghia (React) appears with its Ghia, React, Base UI, StyleX and compiler versions when it is in the run", () => {
+    const line = environmentLine({ ...env, args: { ...env.args, apps: ["ghia", "ghia-react"] }, apps: appInfos(["ghia", "ghia-react"]) })
+    expect(line).toContain("Ghia React 8fcd806 (zed 451f7ec, Bun 1.4.4+38afee6c8) (@ghia/react 0.11.1, React 19.2.0, Base UI 1.0.0, StyleX 0.15.0, React Compiler 19.1.0-rc.3), Bun")
+  })
+
   test("GPUIX appears with its @gpuix/solid version when it is in the run", () => {
     const line = environmentLine({ ...env, args: { ...env.args, apps: ["ghia", "gpuix"] }, apps: appInfos(["ghia", "gpuix"]) })
     expect(line).toContain("Ghia 8fcd806 (zed 451f7ec, Bun 1.4.4+38afee6c8), GPUIX 0.11.0 (npm), Bun")

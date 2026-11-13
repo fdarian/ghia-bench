@@ -25,7 +25,7 @@ const SCROLL_BARS: Record<string, string> = {
   unset: "automatic (unset)",
 }
 
-function ghiaVersion(stamp: BuildStamp<"ghia" | "ghia-aot">): string {
+function ghiaVersion(stamp: BuildStamp<"ghia" | "ghia-aot" | "ghia-react">): string {
   const v = stamp.versions
   const aot = "aot" in v && v.aot ? ", AOT" : ""
   return `${v.sha.slice(0, 7)}${v.dirty ? "+dirty" : ""} (zed ${v.zedSha.slice(0, 7)}, Bun ${v.bun}${aot})`
@@ -58,6 +58,10 @@ export function environmentLine(env: Env): string {
   const versions: string[] = []
   if (apps.includes("ghia")) versions.push(`Ghia ${ghiaVersion(buildOf(env, "ghia"))}`)
   if (apps.includes("ghia-aot")) versions.push(`Ghia AOT ${ghiaVersion(buildOf(env, "ghia-aot"))}`)
+  if (apps.includes("ghia-react")) {
+    const react = buildOf(env, "ghia-react").versions
+    versions.push(`Ghia React ${ghiaVersion(buildOf(env, "ghia-react"))} (@ghia/react ${react.react}, React ${react.reactLib}, Base UI ${react.baseUi}, StyleX ${react.stylex}, React Compiler ${react.compiler})`)
+  }
   if (apps.includes("gpuix")) versions.push(`GPUIX ${buildOf(env, "gpuix").versions.solid} (npm)`)
   if (apps.includes("gpui")) versions.push(`gpui ${buildOf(env, "gpui").versions.commit.slice(0, 7)}`)
   if (apps.includes("electron")) {
