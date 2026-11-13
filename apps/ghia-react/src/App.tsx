@@ -5,7 +5,6 @@ import { Avatar } from '@base-ui/react/avatar'
 import { Button } from '@base-ui/react/button'
 import { Input } from '@base-ui/react/input'
 import { ScrollArea } from '@base-ui/react/scroll-area'
-import type { PublicInstance } from '@ghia/react'
 import * as stylex from '@stylexjs/stylex'
 import type { StyleXStyles } from '@stylexjs/stylex'
 import type { Message } from './types'
@@ -408,12 +407,11 @@ type MessageListProps = {
 // React Compiler skips this component: useVirtualizer returns functions it cannot memoize safely.
 // Keeping the virtualizer here leaves App, with the filter, compiled.
 function MessageList(props: MessageListProps) {
-  const listRef = useRef<PublicInstance>(null)
+  const listRef = useRef<HTMLDivElement>(null)
 
   const virtualizer = useVirtualizer({
     count: props.results.length,
-    // Ghia typing gap: a host ref is a PublicInstance, not a DOM Element (see report).
-    getScrollElement: () => listRef.current as never,
+    getScrollElement: () => listRef.current,
     estimateSize: () => ROW_HEIGHT,
     overscan: OVERSCAN,
   })
