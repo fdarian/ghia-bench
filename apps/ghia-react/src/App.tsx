@@ -1,10 +1,11 @@
-import { useRef, useState } from 'react'
-import type { KeyboardEvent, Ref, RefObject } from 'react'
+import { useImperativeHandle, useRef, useState } from 'react'
+import type { KeyboardEvent, Ref } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { Avatar } from '@base-ui/react/avatar'
 import { Button } from '@base-ui/react/button'
 import { Input } from '@base-ui/react/input'
 import { ScrollArea } from '@base-ui/react/scroll-area'
+import type { PublicInstance } from '@ghia/react'
 import * as stylex from '@stylexjs/stylex'
 import type { StyleXStyles } from '@stylexjs/stylex'
 import type { Message } from './types'
@@ -283,9 +284,9 @@ const labelColors = stylex.create({
   projects: { backgroundColor: '#4F46E5' },
 })
 
-function current<T>(ref: RefObject<T | null>): T {
-  if (ref.current === null) throw new Error('ref is not attached')
-  return ref.current
+function attached<T>(element: T | null): T {
+  if (element === null) throw new Error('ref is not attached')
+  return element
 }
 
 function avatarColor(name: string) {
@@ -392,13 +393,69 @@ function Row(props: RowProps) {
   )
 }
 
-type DetailProps = { message: Message | undefined; viewportRef: Ref<HTMLDivElement> }
+type ListHandle = {
+  scrollToIndex: (index: number) => void
+  scrollToTop: () => void
+}
+
+type MessageListProps = {
+  results: Message[]
+  selectedIndex: number
+  onSelect: (index: number) => void
+  handle: Ref<ListHandle>
+}
+
+// React Compiler skips this component: useVirtualizer returns functions it cannot memoize safely.
+// Keeping the virtualizer here leaves App, with the filter, compiled.
+function MessageList(props: MessageListProps) {
+  const listRef = useRef<PublicInstance>(null)
+
+  const virtualizer = useVirtualizer({
+    count: props.results.length,
+    // Ghia typing gap: a host ref is a PublicInstance, not a DOM Element (see report).
+    getScrollElement: () => listRef.current as never,
+    estimateSize: () => ROW_HEIGHT,
+    overscan: OVERSCAN,
+  })
+
+  useImperativeHandle(props.handle, () => ({
+    scrollToIndex: (index) => virtualizer.scrollToIndex(index, { align: 'auto' }),
+    scrollToTop: () => {
+      attached(listRef.current).scrollTop = 0
+    },
+  }))
+
+  return (
+    <div ref={listRef} {...stylex.props(styles.list)}>
+      <div {...stylex.props(styles.listInner)} style={{ height: virtualizer.getTotalSize() }}>
+        {virtualizer.getVirtualItems().map((item) => (
+          <Row
+            key={item.key}
+            message={props.results[item.index]}
+            index={item.index}
+            top={item.start}
+            selected={item.index === props.selectedIndex}
+            onSelect={props.onSelect}
+          />
+        ))}
+      </div>
+    </div>
+  )
+}
+
+type DetailHandle = { scrollToTop: () => void }
+
+type DetailProps = { message: Message | undefined; handle: Ref<DetailHandle> }
 
 function Detail(props: DetailProps) {
   const message = props.message
+  const viewportRef = useRef<HTMLDivElement>(null)
+  useImperativeHandle(props.handle, () => ({
+    scrollToTop: () => attached(viewportRef.current).scrollTo({ top: 0 }),
+  }))
   return (
     <ScrollArea.Root {...stylex.props(styles.detail)}>
-      <ScrollArea.Viewport ref={props.viewportRef} {...stylex.props(styles.viewport)}>
+      <ScrollArea.Viewport ref={viewportRef} {...stylex.props(styles.viewport)}>
         <ScrollArea.Content {...stylex.props(styles.detailContent)}>
           {message === undefined ? (
             <div {...stylex.props(styles.empty)}>
@@ -441,30 +498,23 @@ export function App(props: { messages: Message[] }) {
   const [text, setText] = useState('')
   const [selectedIndex, setSelectedIndex] = useState(0)
 
-  const listRef = useRef<HTMLDivElement>(null)
-  const detailRef = useRef<HTMLDivElement>(null)
+  const listRef = useRef<ListHandle>(null)
+  const detailRef = useRef<DetailHandle>(null)
 
   const query = text.trim().toLowerCase()
   const results = query === '' ? messages : messages.filter((_, index) => haystacks[index].includes(query))
   const selected = results[selectedIndex]
 
-  const virtualizer = useVirtualizer({
-    count: results.length,
-    getScrollElement: () => listRef.current,
-    estimateSize: () => ROW_HEIGHT,
-    overscan: OVERSCAN,
-  })
-
   function select(index: number) {
     setSelectedIndex(index)
-    current(detailRef).scrollTo({ top: 0 })
+    attached(detailRef.current).scrollToTop()
   }
 
   function filter(value: string) {
     setText(value)
     setSelectedIndex(0)
-    current(listRef).scrollTop = 0
-    current(detailRef).scrollTo({ top: 0 })
+    attached(listRef.current).scrollToTop()
+    attached(detailRef.current).scrollToTop()
   }
 
   function onKeyDown(event: KeyboardEvent<HTMLInputElement>) {
@@ -474,7 +524,7 @@ export function App(props: { messages: Message[] }) {
       if (count === 0) return
       const next = Math.min(count - 1, Math.max(0, selectedIndex + (event.key === 'ArrowDown' ? 1 : -1)))
       select(next)
-      virtualizer.scrollToIndex(next, { align: 'auto' })
+      attached(listRef.current).scrollToIndex(next)
     } else if (event.key === 'Escape') {
       filter('')
     }
@@ -497,22 +547,9 @@ export function App(props: { messages: Message[] }) {
         <div {...stylex.props(styles.summary)}>
           <div {...stylex.props(styles.summaryText)}>{`${numberFormat.format(results.length)} conversations`}</div>
         </div>
-        <div ref={listRef} {...stylex.props(styles.list)}>
-          <div {...stylex.props(styles.listInner)} style={{ height: virtualizer.getTotalSize() }}>
-            {virtualizer.getVirtualItems().map((item) => (
-              <Row
-                key={item.key}
-                message={results[item.index]}
-                index={item.index}
-                top={item.start}
-                selected={item.index === selectedIndex}
-                onSelect={select}
-              />
-            ))}
-          </div>
-        </div>
+        <MessageList results={results} selectedIndex={selectedIndex} onSelect={select} handle={listRef} />
       </div>
-      <Detail message={selected} viewportRef={detailRef} />
+      <Detail message={selected} handle={detailRef} />
     </div>
   )
 }

@@ -16,7 +16,7 @@ if (!existsSync(binary)) throw new Error('ghia build did not write the executabl
 mkdirSync(join(app, 'Contents/Resources'), { recursive: true })
 
 cpSync(join(repo, 'data/messages.json'), join(app, 'Contents/Resources/messages.json'))
-cpSync(join(root, 'dist/stylex.css'), join(app, 'Contents/Resources/stylex.css'))
+cpSync(join(root, 'dist/assets/stylex.css'), join(app, 'Contents/Resources/stylex.css'))
 
 writeFileSync(
   join(app, 'Contents/Info.plist'),
