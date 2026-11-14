@@ -4,6 +4,7 @@ export const APPS = [
   { id: "ghia", buildScript: "apps/ghia/build.sh", label: "Ghia", bundle: "Mailbox-Ghia.app", multiProcess: false, chromium: false },
   { id: "ghia-aot", buildScript: "apps/ghia/build-aot.sh", label: "Ghia (bun AOT)", bundle: "Mailbox-GhiaAOT.app", multiProcess: false, chromium: false },
   { id: "ghia-react", buildScript: "apps/ghia-react/build.sh", label: "Ghia (React)", bundle: "Mailbox-GhiaReact.app", multiProcess: false, chromium: false },
+  { id: "ghia-solid-stack", buildScript: "apps/ghia-solid-stack/build.sh", label: "Ghia (Solid, React-like stack)", bundle: "Mailbox-GhiaSolidStack.app", multiProcess: false, chromium: false },
   { id: "gpuix", buildScript: "apps/gpuix/build.sh", label: "GPUIX", bundle: "Mailbox-GPUIX.app", multiProcess: false, chromium: false },
   { id: "gpui", buildScript: "apps/gpui/build.sh", label: "GPUI", bundle: "Mailbox-GPUI.app", multiProcess: false, chromium: false },
   { id: "swiftui", buildScript: "apps/swiftui/build.sh", label: "SwiftUI", bundle: "Mailbox-SwiftUI.app", multiProcess: false, chromium: false },

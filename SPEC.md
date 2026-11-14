@@ -1,6 +1,6 @@
 # Mailbox app spec
 
-Contract that all nine apps (Electron, Ghia, Ghia compiled with Bun AOT, Ghia in React, GPUIX, raw GPUI, SwiftUI, NSH, MyGo) implement. Apps contain no benchmark code; all measurement is external.
+Contract that all ten apps (Electron, Ghia, Ghia compiled with Bun AOT, Ghia in React, Ghia in Solid with the React app's stack, GPUIX, raw GPUI, SwiftUI, NSH, MyGo) implement. Apps contain no benchmark code; all measurement is external.
 
 Light theme only. System UI font (SF Pro) everywhere: CSS `system-ui`, gpui `.SystemUIFont`, Ghia default.
 
@@ -110,6 +110,7 @@ Both scroll areas (the list and the detail pane) show an overlay scrollbar on th
   - Styling: StyleX, extracted statically by `@stylexjs/unplugin` and shipped as `Contents/Resources/stylex.css`, mounted with `<style>`; the Solid app uses style objects.
   - React Compiler: runs on every component except `MessageList`, which it skips because `useVirtualizer` is an incompatible library.
   - Each list row positions itself with one inline `translateY` style: StyleX dynamic values need `@property`, which Ghia skips.
+- Ghia (Solid, React-like stack): the Solid app rebuilt like the React app, to separate the cost of the setup from the cost of React. `@ghia/solid` with StyleX shipped as `stylex.css` and mounted with `<style>`, `@tanstack/solid-virtual` over a plain scrolling `div` (overscan 10, fixed 72 px rows, one inline `translateY` per row), and the React app's element tree and component structure. No Solid headless library runs on Ghia: the Solid ports of Base UI (`@photon-ai/base-ui-solid`) and Kobalte render through `solid-js/web`'s DOM runtime, which assigns `element.className`, a read-only property of Ghia's DOM. So Base UI's `Avatar` (two spans), `Button` (a div) and `ScrollArea` (Root, Viewport, Content; no Scrollbar or Thumb) are plain elements in the same structure.
 - GPUIX: the app is Ghia's code ported to upstream gpuix as published on npm (`@gpuix/solid`, `@gpuix/native` and the prebuilt `@gpuix/native-darwin-arm64`, all 0.11.0; no source build), and 0.11.0 forces these deviations:
   - `render()` takes no window position or appearance, so the app places the window's top-left at (100, 100) and sets Aqua appearance itself through libobjc (`bun:ffi`, `apps/gpuix/src/window.ts`) right after `render()`.
   - Key names are GPUI's (`down`, `up`, `escape`), not DOM's.

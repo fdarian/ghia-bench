@@ -111,12 +111,12 @@ Prerequisites: macOS on Apple silicon, Xcode with the Metal toolchain (and Swift
 scripts/build-all.sh
 ```
 
-From a fresh clone this builds the pinned Ghia (`scripts/setup-ghia.sh`), generates `data/messages.json`, builds the measurement helper and the status panel, then the nine apps into `dist/Mailbox-Electron.app`, `dist/Mailbox-Ghia.app`, `dist/Mailbox-GhiaAOT.app`, `dist/Mailbox-GhiaReact.app`, `dist/Mailbox-GPUIX.app`, `dist/Mailbox-GPUI.app`, `dist/Mailbox-SwiftUI.app`, `dist/Mailbox-NSH.app` and `dist/Mailbox-MyGo.app`, and prints their sizes. It takes a long time (a release gpui build, twice, plus the Swift and Go builds).
+From a fresh clone this builds the pinned Ghia (`scripts/setup-ghia.sh`), generates `data/messages.json`, builds the measurement helper and the status panel, then the ten apps into `dist/Mailbox-Electron.app`, `dist/Mailbox-Ghia.app`, `dist/Mailbox-GhiaAOT.app`, `dist/Mailbox-GhiaReact.app`, `dist/Mailbox-GhiaSolidStack.app`, `dist/Mailbox-GPUIX.app`, `dist/Mailbox-GPUI.app`, `dist/Mailbox-SwiftUI.app`, `dist/Mailbox-NSH.app` and `dist/Mailbox-MyGo.app`, and prints their sizes. It takes a long time (a release gpui build, twice, plus the Swift and Go builds).
 
 <details>
 <summary>Build notes</summary>
 
-- Each step is also runnable alone: `scripts/setup-ghia.sh`, `bun run data`, `harness/helper/build.sh` (writes `harness/bin/benchhelper`), `harness/status/build.sh` (writes `harness/bin/benchstatus`, the progress panel), `apps/<electron|ghia|ghia-react|gpuix|gpui|swiftui|nsh|mygo>/build.sh` and `apps/ghia/build-aot.sh` (the Ghia app again, compiled by the canary Bun in `$BUN_AOT`, default `~/.bun-canary/bin/bun`; it needs `verbatimModuleSyntax` removed from `vendor/ghia/packages/{native,solid}/tsconfig.json`, see the script). Each app script installs its own dependencies from its lockfile.
+- Each step is also runnable alone: `scripts/setup-ghia.sh`, `bun run data`, `harness/helper/build.sh` (writes `harness/bin/benchhelper`), `harness/status/build.sh` (writes `harness/bin/benchstatus`, the progress panel), `apps/<electron|ghia|ghia-react|ghia-solid-stack|gpuix|gpui|swiftui|nsh|mygo>/build.sh` and `apps/ghia/build-aot.sh` (the Ghia app again, compiled by the canary Bun in `$BUN_AOT`, default `~/.bun-canary/bin/bun`; it needs `verbatimModuleSyntax` removed from `vendor/ghia/packages/{native,solid}/tsconfig.json`, see the script). Each app script installs its own dependencies from its lockfile.
 - NSH: `apps/nsh/build.sh` needs `data/messages.json` and the `nsh` CLI on `PATH`. It runs `nsh check` and `nsh package . --target macos`, which uses a prebuilt runtime, so no Rust toolchain is needed; the script then renames the executable to `Mailbox-NSH` and copies `messages.json` into the bundle (see SPEC.md, NSH parity notes).
 - Ghia (React): `apps/ghia-react/build.sh` needs the pinned Ghia built by `scripts/setup-ghia.sh` (it links `@ghia/react`, `@ghia/native`, `ghia`, vite and react from `vendor/ghia`). `ghia build` bundles the app through Vite with the React Compiler (`@rolldown/plugin-babel`) and StyleX (`@stylexjs/unplugin` extracts static CSS); `build.ts` then ships that CSS as `Contents/Resources/stylex.css`, which the app reads at startup and mounts with `<style>` (see SPEC.md, Ghia (React) parity notes).
 - The harness has no dependencies to install.
@@ -204,6 +204,7 @@ scripts/             setup-ghia.sh, build-all.sh
 apps/electron/       Solid + Vite + Electron
 apps/ghia/           @ghia/solid app (build.sh; build-aot.sh builds it again with Bun AOT)
 apps/ghia-react/    React 19 on @ghia/react: Base UI, StyleX, React Compiler, TanStack Virtual
+apps/ghia-solid-stack/  Solid on @ghia/solid built like ghia-react: same component tree, StyleX, TanStack Solid Virtual
 apps/gpuix/          @gpuix/solid app (npm 0.11.0)
 apps/gpui/           Rust crate on gpui
 apps/swiftui/        Swift package, native SwiftUI

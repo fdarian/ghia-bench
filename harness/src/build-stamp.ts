@@ -124,6 +124,19 @@ async function ghiaReactVersions(bun: string): Promise<StampVersions["ghia-react
   }
 }
 
+async function ghiaSolidStackVersions(bun: string): Promise<StampVersions["ghia-solid-stack"]> {
+  const modules = join(REPO_ROOT, "apps", "ghia-solid-stack", "node_modules")
+  const installed = (name: string) => packageVersion(join(modules, name, "package.json"))
+  return {
+    native: installed("@ghia/native"),
+    solid: installed("@ghia/solid"),
+    solidLib: installed("solid-js"),
+    stylex: installed("@stylexjs/stylex"),
+    virtual: installed("@tanstack/solid-virtual"),
+    ...(await ghiaTreeState(bun)),
+  }
+}
+
 async function ghiaAotVersions(): Promise<StampVersions["ghia-aot"]> {
   const compiler = process.env.BUN_AOT
   if (!compiler) throw new Error("BUN_AOT is not set; apps/ghia/build-aot.sh sets it to the Bun that compiled the bundle")
@@ -183,6 +196,7 @@ export async function stampBundle(app: AppId, bundle: string): Promise<BuildStam
     case "ghia": return { app, ...common, versions: await ghiaVersions(process.execPath) }
     case "ghia-aot": return { app, ...common, versions: await ghiaAotVersions() }
     case "ghia-react": return { app, ...common, versions: await ghiaReactVersions(process.execPath) }
+    case "ghia-solid-stack": return { app, ...common, versions: await ghiaSolidStackVersions(process.execPath) }
     case "gpuix": return { app, ...common, versions: await gpuixVersions() }
     case "gpui": return { app, ...common, versions: await gpuiVersions() }
     case "swiftui": return { app, ...common, versions: await swiftuiVersions() }
