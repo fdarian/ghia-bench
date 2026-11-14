@@ -9,8 +9,8 @@
 set -euo pipefail
 
 GHIA_SRC="${GHIA_SRC:-}"
-GHIA_REV="${GHIA_REV:-97618bade946f8ba49201a4239eb76b1702017ef}"
-ZED_REV="${ZED_REV:-febc38e79b0bdc725ebea69f39351a6074e13217}"
+GHIA_REV="${GHIA_REV:-894497391468775f9b955c6770e48d2e2b03bddc}"
+ZED_REV="${ZED_REV:-eea878e63f21cb2b471ab532d9427fee2c4bc13b}"
 HEAVY="${GHIA_HEAVY:-}"
 
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
