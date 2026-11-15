@@ -131,6 +131,8 @@ async function ghiaSolidStackVersions(bun: string): Promise<StampVersions["ghia-
     native: installed("@ghia/native"),
     solid: installed("@ghia/solid"),
     solidLib: installed("solid-js"),
+    baseUiSolid: installed("@photon-ai/base-ui-solid"),
+    kobalte: installed("@kobalte/core"),
     stylex: installed("@stylexjs/stylex"),
     virtual: installed("@tanstack/solid-virtual"),
     ...(await ghiaTreeState(bun)),

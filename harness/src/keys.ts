@@ -139,7 +139,7 @@ export function upstreamOf(stamp: BuildStamp): { label: string; versions: Record
       return {
         label: v.sha.slice(0, 8),
         versions: {
-          native: v.native, solid: v.solid, solidLib: v.solidLib, stylex: v.stylex, virtual: v.virtual,
+          native: v.native, solid: v.solid, solidLib: v.solidLib, baseUiSolid: v.baseUiSolid, kobalte: v.kobalte, stylex: v.stylex, virtual: v.virtual,
           sha: v.sha, zedSha: v.zedSha, bun: v.bun,
         },
       }
