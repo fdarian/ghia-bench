@@ -1,15 +1,18 @@
 import { For, Show, batch, createMemo, createSignal } from 'solid-js'
 import { createVirtualizer } from '@tanstack/solid-virtual'
-import { Avatar } from '@photon-ai/base-ui-solid/avatar'
-import { Input } from '@photon-ai/base-ui-solid/input'
-import { ScrollArea } from '@photon-ai/base-ui-solid/scroll-area'
-import { Button } from '@kobalte/core/button'
+import type { HostElement } from '@ghia/solid'
+import { createAvatarFallback, createAvatarRoot } from 'ghia-base-ui/avatar'
+import { createButton } from 'ghia-base-ui/button'
+import { createInput } from 'ghia-base-ui/input'
+import { createScrollAreaRoot, createScrollAreaScrollbar } from 'ghia-base-ui/scroll-area'
 import * as stylex from '@stylexjs/stylex'
 import type { StyleXStyles } from '@stylexjs/stylex'
 import type { Message } from './types'
 
 const ROW_HEIGHT = 72
 const OVERSCAN = 10
+const SCROLLBAR_WIDTH = 8
+const THUMB_INSET = 4
 
 const FOLDERS = ['Inbox', 'Starred', 'Sent', 'Drafts', 'Archive', 'Spam', 'Trash']
 const FOLDER_COUNTS: Record<string, number> = {
@@ -208,7 +211,7 @@ const styles = stylex.create({
     position: 'relative',
     backgroundColor: '#FFFFFF',
   },
-  viewport: { width: '100%', height: '100%' },
+  viewport: { width: '100%', height: '100%', overflowY: 'scroll', scrollbarWidth: 'none' },
   detailContent: {
     display: 'flex',
     flexDirection: 'column',
@@ -223,7 +226,7 @@ const styles = stylex.create({
     height: '100%',
     opacity: { default: 0, ':hover': 1 },
   },
-  thumb: { width: 8, borderRadius: 4, backgroundColor: '#D4D4D8' },
+  thumb: { position: 'absolute', left: 0, width: 8, borderRadius: 4, backgroundColor: '#D4D4D8' },
   empty: {
     display: 'flex',
     alignItems: 'center',
@@ -306,8 +309,10 @@ type MessageAvatarProps = { name: string; size: 'small' | 'large'; xstyle?: Styl
 
 function MessageAvatar(props: MessageAvatarProps) {
   const large = () => props.size === 'large'
+  const root = createAvatarRoot()
+  const fallback = createAvatarFallback(root, {})
   return (
-    <Avatar.Root
+    <div
       {...stylex.props(
         styles.avatar,
         large() ? styles.avatarLarge : styles.avatarSmall,
@@ -315,21 +320,24 @@ function MessageAvatar(props: MessageAvatarProps) {
         props.xstyle,
       )}
     >
-      <Avatar.Fallback
-        {...stylex.props(styles.avatarInitials, large() ? styles.avatarInitialsLarge : styles.avatarInitialsSmall)}
-      >
-        {initials(props.name)}
-      </Avatar.Fallback>
-    </Avatar.Root>
+      <Show when={fallback.visible()}>
+        <div
+          {...stylex.props(styles.avatarInitials, large() ? styles.avatarInitialsLarge : styles.avatarInitialsSmall)}
+        >
+          {initials(props.name)}
+        </div>
+      </Show>
+    </div>
   )
 }
 
 function FolderButton(props: { name: string; selected: boolean; count: number }) {
+  const button = createButton()
   return (
-    <Button as="div" {...stylex.props(styles.folder, props.selected && styles.folderSelected)}>
+    <div {...button.buttonProps} {...stylex.props(styles.folder, props.selected && styles.folderSelected)}>
       <div {...stylex.props(styles.folderName)}>{props.name}</div>
       <div {...stylex.props(styles.folderCount)}>{formatCount(props.count)}</div>
-    </Button>
+    </div>
   )
 }
 
@@ -450,15 +458,27 @@ type DetailHandle = { scrollToTop: () => void }
 type DetailProps = { message: Message | undefined; handle: (handle: DetailHandle) => void }
 
 function Detail(props: DetailProps) {
-  let viewport: HTMLDivElement | undefined
+  let viewport: HostElement | undefined
   props.handle({
     scrollToTop: () => attached(viewport).scrollTo({ top: 0 }),
   })
+  const scrollArea = createScrollAreaRoot({
+    orientation: () => 'vertical',
+    trackSize: SCROLLBAR_WIDTH,
+    thumbInset: THUMB_INSET,
+  })
+  const scrollbar = createScrollAreaScrollbar(scrollArea, 'y', { thumbInset: THUMB_INSET })
   return (
-    <ScrollArea.Root {...stylex.props(styles.detail)}>
-      {/* The port sets its own `class` on the Viewport and merges only `class`, so a `className` would lose to it. */}
-      <ScrollArea.Viewport ref={viewport} class={stylex.props(styles.viewport).className}>
-        <ScrollArea.Content {...stylex.props(styles.detailContent)}>
+    <div {...scrollArea.rootProps} {...stylex.props(styles.detail)}>
+      <div
+        {...scrollArea.viewportProps}
+        ref={(element) => {
+          scrollArea.viewportProps.ref(element)
+          viewport = element
+        }}
+        {...stylex.props(styles.viewport)}
+      >
+        <div {...scrollArea.contentProps} {...stylex.props(styles.detailContent)}>
           <Show
             when={props.message}
             keyed
@@ -487,12 +507,14 @@ function Detail(props: DetailProps) {
               </div>
             )}
           </Show>
-        </ScrollArea.Content>
-      </ScrollArea.Viewport>
-      <ScrollArea.Scrollbar orientation="vertical" {...stylex.props(styles.scrollbar)}>
-        <ScrollArea.Thumb {...stylex.props(styles.thumb)} />
-      </ScrollArea.Scrollbar>
-    </ScrollArea.Root>
+        </div>
+      </div>
+      <Show when={scrollbar.span() !== null}>
+        <div {...scrollbar.trackProps} {...stylex.props(styles.scrollbar)}>
+          <div {...stylex.props(styles.thumb)} style={{ top: scrollbar.span()?.start, height: scrollbar.span()?.length }} />
+        </div>
+      </Show>
+    </div>
   )
 }
 
@@ -503,6 +525,7 @@ export function App(props: { messages: Message[] }) {
   const unreadCount = props.messages.filter((message) => message.unread).length
 
   const [text, setText] = createSignal('')
+  const search = createInput({ value: text, onValueChange: filter })
   const [selectedIndex, setSelectedIndex] = createSignal(0)
 
   let list: ListHandle | undefined
@@ -546,11 +569,10 @@ export function App(props: { messages: Message[] }) {
       <Sidebar unreadCount={unreadCount} />
       <div {...stylex.props(styles.listPane)}>
         <div {...stylex.props(styles.searchBar)}>
-          <Input
+          <input
+            {...search.inputProps}
             autoFocus
-            value={text()}
             placeholder="Search mail"
-            onInput={(event) => filter(event.currentTarget.value)}
             onKeyDown={onKeyDown}
             {...stylex.props(styles.search)}
           />

@@ -381,7 +381,7 @@ function ghiaReactLine(stamp: BuildStamp<"ghia-react">): string {
 
 function ghiaSolidStackLine(stamp: BuildStamp<"ghia-solid-stack">): string {
   const v = stamp.versions
-  return `Ghia (Solid, React-like stack) ${v.sha}${v.dirty ? " (tree had uncommitted changes)" : ""}, zed ${v.zedSha}, @ghia/native ${v.native}, @ghia/solid ${v.solid}, Solid ${v.solidLib}, Base UI Solid ${v.baseUiSolid}, Kobalte ${v.kobalte}, StyleX ${v.stylex}, TanStack Solid Virtual ${v.virtual}, from ${v.source}; built with Bun ${v.bun}.`
+  return `Ghia (Solid, React-like stack) ${v.sha}${v.dirty ? " (tree had uncommitted changes)" : ""}, zed ${v.zedSha}, @ghia/native ${v.native}, @ghia/solid ${v.solid}, Solid ${v.solidLib}, ghia-base-ui ${v.ghiaBaseUi}, StyleX ${v.stylex}, TanStack Solid Virtual ${v.virtual}, from ${v.source}; built with Bun ${v.bun}.`
 }
 
 function gpuixLine(stamp: BuildStamp<"gpuix">): string {

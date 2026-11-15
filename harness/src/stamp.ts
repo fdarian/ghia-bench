@@ -13,7 +13,7 @@ type GhiaReactVersions = {
 }
 
 type GhiaSolidStackVersions = {
-  native: string; solid: string; solidLib: string; baseUiSolid: string; kobalte: string; stylex: string; virtual: string
+  native: string; solid: string; solidLib: string; ghiaBaseUi: string; stylex: string; virtual: string
   sha: string; zedSha: string; dirty: boolean; source: string; bun: string
 }
 
@@ -50,7 +50,7 @@ const FIELD_TYPES: { [A in AppId]: Record<keyof StampVersions[A], "string" | "bo
     sha: "string", zedSha: "string", dirty: "boolean", source: "string", bun: "string",
   },
   "ghia-solid-stack": {
-    native: "string", solid: "string", solidLib: "string", baseUiSolid: "string", kobalte: "string", stylex: "string", virtual: "string",
+    native: "string", solid: "string", solidLib: "string", ghiaBaseUi: "string", stylex: "string", virtual: "string",
     sha: "string", zedSha: "string", dirty: "boolean", source: "string", bun: "string",
   },
   gpuix: { solid: "string", native: "string", addon: "string", source: "string" },

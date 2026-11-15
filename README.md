@@ -204,7 +204,7 @@ scripts/             setup-ghia.sh, build-all.sh
 apps/electron/       Solid + Vite + Electron
 apps/ghia/           @ghia/solid app (build.sh; build-aot.sh builds it again with Bun AOT)
 apps/ghia-react/    React 19 on @ghia/react: Base UI, StyleX, React Compiler, TanStack Virtual
-apps/ghia-solid-stack/  Solid on @ghia/solid built like ghia-react: same component tree, StyleX, TanStack Solid Virtual, photon Base UI Solid port (pinned git source) + Kobalte Button
+apps/ghia-solid-stack/  Solid on @ghia/solid built like ghia-react: same component tree, StyleX, TanStack Solid Virtual, ghia-base-ui (the ghia port of Base UI, npm package pinned to 0.2.0) for Avatar, Input, Button and ScrollArea
 apps/gpuix/          @gpuix/solid app (npm 0.11.0)
 apps/gpui/           Rust crate on gpui
 apps/swiftui/        Swift package, native SwiftUI

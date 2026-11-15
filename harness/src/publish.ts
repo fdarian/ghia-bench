@@ -64,7 +64,7 @@ export function environmentLine(env: Env): string {
   }
   if (apps.includes("ghia-solid-stack")) {
     const stack = buildOf(env, "ghia-solid-stack").versions
-    versions.push(`Ghia Solid stack ${ghiaVersion(buildOf(env, "ghia-solid-stack"))} (@ghia/solid ${stack.solid}, Solid ${stack.solidLib}, Base UI Solid ${stack.baseUiSolid}, Kobalte ${stack.kobalte}, StyleX ${stack.stylex}, TanStack Solid Virtual ${stack.virtual})`)
+    versions.push(`Ghia Solid stack ${ghiaVersion(buildOf(env, "ghia-solid-stack"))} (@ghia/solid ${stack.solid}, Solid ${stack.solidLib}, ghia-base-ui ${stack.ghiaBaseUi}, StyleX ${stack.stylex}, TanStack Solid Virtual ${stack.virtual})`)
   }
   if (apps.includes("gpuix")) versions.push(`GPUIX ${buildOf(env, "gpuix").versions.solid} (npm)`)
   if (apps.includes("gpui")) versions.push(`gpui ${buildOf(env, "gpui").versions.commit.slice(0, 7)}`)

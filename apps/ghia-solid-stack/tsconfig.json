@@ -8,10 +8,7 @@
     "strict": true,
     "skipLibCheck": true,
     "noEmit": true,
-    "types": ["bun", "vite/client"],
-    "paths": {
-      "@ghia/solid/jsx-runtime": ["../../vendor/ghia/packages/solid/dist/jsx-runtime.d.ts"]
-    }
+    "types": ["bun", "vite/client"]
   },
   "include": ["src", "build.ts", "vite.config.mts"]
 }
