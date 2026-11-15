@@ -456,7 +456,8 @@ function Detail(props: DetailProps) {
   })
   return (
     <ScrollArea.Root {...stylex.props(styles.detail)}>
-      <ScrollArea.Viewport ref={viewport} {...stylex.props(styles.viewport)}>
+      {/* The port sets its own `class` on the Viewport and merges only `class`, so a `className` would lose to it. */}
+      <ScrollArea.Viewport ref={viewport} class={stylex.props(styles.viewport).className}>
         <ScrollArea.Content {...stylex.props(styles.detailContent)}>
           <Show
             when={props.message}
