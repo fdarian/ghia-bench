@@ -1,5 +1,9 @@
 import { For, Show, batch, createMemo, createSignal } from 'solid-js'
 import { createVirtualizer } from '@tanstack/solid-virtual'
+import { Avatar } from '@photon-ai/base-ui-solid/avatar'
+import { Input } from '@photon-ai/base-ui-solid/input'
+import { ScrollArea } from '@photon-ai/base-ui-solid/scroll-area'
+import { Button } from '@kobalte/core/button'
 import * as stylex from '@stylexjs/stylex'
 import type { StyleXStyles } from '@stylexjs/stylex'
 import type { Message } from './types'
@@ -204,13 +208,22 @@ const styles = stylex.create({
     position: 'relative',
     backgroundColor: '#FFFFFF',
   },
-  viewport: { width: '100%', height: '100%', overflowY: 'auto' },
+  viewport: { width: '100%', height: '100%' },
   detailContent: {
     display: 'flex',
     flexDirection: 'column',
     minHeight: '100%',
     padding: 32,
   },
+  scrollbar: {
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    width: 8,
+    height: '100%',
+    opacity: { default: 0, ':hover': 1 },
+  },
+  thumb: { width: 8, borderRadius: 4, backgroundColor: '#D4D4D8' },
   empty: {
     display: 'flex',
     alignItems: 'center',
@@ -289,14 +302,12 @@ function initials(name: string) {
     .join('')
 }
 
-// No Solid headless library runs on Ghia (SPEC.md says why), so this mirrors the element tree
-// of Base UI's Avatar (Root and Fallback, both spans), Button (rendered as a div) and ScrollArea (Root, Viewport, Content).
 type MessageAvatarProps = { name: string; size: 'small' | 'large'; xstyle?: StyleXStyles }
 
 function MessageAvatar(props: MessageAvatarProps) {
   const large = () => props.size === 'large'
   return (
-    <span
+    <Avatar.Root
       {...stylex.props(
         styles.avatar,
         large() ? styles.avatarLarge : styles.avatarSmall,
@@ -304,21 +315,21 @@ function MessageAvatar(props: MessageAvatarProps) {
         props.xstyle,
       )}
     >
-      <span
+      <Avatar.Fallback
         {...stylex.props(styles.avatarInitials, large() ? styles.avatarInitialsLarge : styles.avatarInitialsSmall)}
       >
         {initials(props.name)}
-      </span>
-    </span>
+      </Avatar.Fallback>
+    </Avatar.Root>
   )
 }
 
 function FolderButton(props: { name: string; selected: boolean; count: number }) {
   return (
-    <div {...stylex.props(styles.folder, props.selected && styles.folderSelected)}>
+    <Button as="div" {...stylex.props(styles.folder, props.selected && styles.folderSelected)}>
       <div {...stylex.props(styles.folderName)}>{props.name}</div>
       <div {...stylex.props(styles.folderCount)}>{formatCount(props.count)}</div>
-    </div>
+    </Button>
   )
 }
 
@@ -444,9 +455,9 @@ function Detail(props: DetailProps) {
     scrollToTop: () => attached(viewport).scrollTo({ top: 0 }),
   })
   return (
-    <div {...stylex.props(styles.detail)}>
-      <div ref={viewport} {...stylex.props(styles.viewport)}>
-        <div {...stylex.props(styles.detailContent)}>
+    <ScrollArea.Root {...stylex.props(styles.detail)}>
+      <ScrollArea.Viewport ref={viewport} {...stylex.props(styles.viewport)}>
+        <ScrollArea.Content {...stylex.props(styles.detailContent)}>
           <Show
             when={props.message}
             keyed
@@ -475,9 +486,12 @@ function Detail(props: DetailProps) {
               </div>
             )}
           </Show>
-        </div>
-      </div>
-    </div>
+        </ScrollArea.Content>
+      </ScrollArea.Viewport>
+      <ScrollArea.Scrollbar orientation="vertical" {...stylex.props(styles.scrollbar)}>
+        <ScrollArea.Thumb {...stylex.props(styles.thumb)} />
+      </ScrollArea.Scrollbar>
+    </ScrollArea.Root>
   )
 }
 
@@ -531,11 +545,11 @@ export function App(props: { messages: Message[] }) {
       <Sidebar unreadCount={unreadCount} />
       <div {...stylex.props(styles.listPane)}>
         <div {...stylex.props(styles.searchBar)}>
-          <input
+          <Input
             autoFocus
             value={text()}
             placeholder="Search mail"
-            onInput={(event) => filter(event.value)}
+            onInput={(event) => filter(event.currentTarget.value)}
             onKeyDown={onKeyDown}
             {...stylex.props(styles.search)}
           />

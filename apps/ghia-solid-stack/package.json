@@ -12,6 +12,8 @@
   "dependencies": {
     "@ghia/native": "link:../../vendor/ghia/packages/native",
     "@ghia/solid": "link:../../vendor/ghia/packages/solid",
+    "@kobalte/core": "0.13.14",
+    "@photon-ai/base-ui-solid": "github:photon-hq/base-ui-solid#c155ca9c5e45cf9cf522808ea82bdf4412f68395&path:/packages/solid",
     "@stylexjs/stylex": "^0.19.2",
     "@tanstack/solid-virtual": "^3.13.0",
     "solid-js": "link:../../vendor/ghia/packages/solid/node_modules/solid-js"
